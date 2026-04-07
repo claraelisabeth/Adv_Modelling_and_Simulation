@@ -177,6 +177,25 @@ Cellular automata (CA) are discrete, computational models consisting of a regula
 https://www.youtube.com/watch?v=DKGodqDs9sA&t=189 
 
 
+### Questions that arose
+
+1. In the buring phase when considering a cell that is not buring we have to check conditions if the cell ignites. For now we define thse conditions as 
+    ```
+    self.diff_state[i, j, H] > self.ignition_temp and
+    self.state[i, j, F] > self.ignition_fuel and
+    self.diff_state[i, j, O] > self.ignition_oxy
+    ```
+    Citing the fireprotection.net.nz (https://fireprotection.net.nz/Elements-of-the-Fire-Triangle#:~:text=Air%20contains%20about%2021%20percent,%2C%20embers%2C%20etc).
+    They write,  
+    *Air contains about 21 percent oxygen, and most fires require at least 16 percent oxygen content to burn. Oxygen supports the chemical processes that occur during fire. When fuel burns, it reacts with oxygen from the surrounding air, releasing heat and generating combustion products (gases, smoke, embers, etc.). This process is known as oxidation.*   
+    So should we set `ignition_oxy` as $16/21=0.76$?  
+    What about `ignition_temp` or `ignition_fuel`???
+
+    Also should we consider random ignition? Randomness still depending on the fire triangle?
+
+2. 
+
+
 
 
 
