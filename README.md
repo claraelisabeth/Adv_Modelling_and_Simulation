@@ -1,8 +1,8 @@
 # Advanced Modelling of Fire Spreading
 
-Clara Pichler 1191769
-Name Lastname MN
-Name Lastname MN
+Clara Pichler 1191769, 
+Name Lastname MN, 
+Name Lastname MN, and
 Name Lastname MN
 
 
