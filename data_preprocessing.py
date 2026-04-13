@@ -70,11 +70,6 @@ class sentinel_client:
             image = plt.imread(io.BytesIO(response.content))
             fuel_matrix = image[:,:,0]
             water_matrix = image[:,:,2]
-            
-            # Optional: Speichern falls gewünscht
-            np.save('sentinel_fuel.npy', fuel_matrix)
-            np.save('sentinel_water.npy', water_matrix)
-            
             return fuel_matrix, water_matrix
         else:
             print(f"Error: {response.status_code}, {response.text}")
