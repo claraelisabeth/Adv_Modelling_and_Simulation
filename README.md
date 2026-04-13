@@ -1,7 +1,7 @@
 # Advanced Modelling of Fire Spreading
 
 Clara Pichler 1191769, 
-Name Lastname MN, 
+Hannah Pernthaner 11920573, 
 Name Lastname MN, and
 Name Lastname MN
 
@@ -191,6 +191,13 @@ https://www.youtube.com/watch?v=DKGodqDs9sA&t=189
     So should we set `ignition_oxy` as $16/21=0.76$?  
     What about `ignition_temp` or `ignition_fuel`???
 
+    Ignition fuel should probably be somewhere around here:
+    *Values close to zero (-0.1 to 0.1) generally correspond to barren areas of rock, sand, or snow. Low, positive values represent shrub and grassland (approximately 0.2 to 0.4), while high values indicate temperate and tropical rainforests (values approaching 1). It is a good proxy for live green vegetation*
+    https://custom-scripts.sentinel-hub.com/custom-scripts/hls/ndvi/
+
+    Ignition temp dependent on type of fuel?
+
+
     Also should we consider random ignition? Randomness still depending on the fire triangle?
 
 2. 
@@ -205,11 +212,11 @@ This can be written nicer later on
 
 [1] https://arxiv.org/abs/cond-mat/0202022
 
-[2]
+[2] https://custom-scripts.sentinel-hub.com/custom-scripts/hls/ndvi/
 
-[3]
+[3] https://custom-scripts.sentinel-hub.com/custom-scripts/planet/planetscope/ndwi/
 
-[4]
+[4] 
 
 [5]
 

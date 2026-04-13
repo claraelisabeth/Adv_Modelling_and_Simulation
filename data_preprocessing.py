@@ -15,7 +15,8 @@ class sentinel_client:
         self.oauth = OAuth2Session(client=client)
         self.oauth.fetch_token(token_url=self.token_url, client_secret=client_secret, include_client_id=True)
 
-    def get_data(self, lat_min, lat_max, lon_min, lon_max, date_start, date_end):
+
+    def get_data(self, lon_min, lat_min, lon_max, lat_max, date_start, date_end, width, height):
         if lat_min > lat_max or lon_min > lon_max:
             raise ValueError("Minimum latitude/longitude must be less than maximum latitude/longitude.")
         if date_start > date_end:
@@ -24,6 +25,9 @@ class sentinel_client:
         data = {
           "input": {
             "bounds": {
+              "properties": {
+                "crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
+              },
               "bbox": [lon_min, lat_min, lon_max, lat_max]
             },
             "data": [
@@ -39,8 +43,8 @@ class sentinel_client:
             ]
           },
           "output": {
-            "width": 500,
-            "height": 500,
+            "width": width,
+            "height": height,
             "responses": [
               {
                 "identifier": "default",
