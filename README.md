@@ -2,7 +2,7 @@
 
 Clara Pichler 1191769, 
 Hannah Pernthaner 11920573, 
-Name Lastname MN, and
+Hanno Bösch 11827161, and
 Name Lastname MN
 
 
