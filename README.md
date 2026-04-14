@@ -3,7 +3,7 @@
 Clara Pichler 1191769, 
 Hannah Pernthaner 11920573, 
 Hanno Bösch 11827161, and
-Name Lastname MN
+Ambrus Toth 12450771
 
 
 ## Motivation
