@@ -28,10 +28,12 @@ pip install -r requirements.txt
 ```
 With the following line one can run our simulation (example)
 ```
-python3 main.py
+python3 -m test.creating_simulations
 ```
 
-## Data
+
+## Repository Structure
+
 
 
 ## Model
@@ -124,6 +126,19 @@ $$
 
 
 
+## Data
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ## Tasks
@@ -196,11 +211,18 @@ https://www.youtube.com/watch?v=DKGodqDs9sA&t=189
     https://custom-scripts.sentinel-hub.com/custom-scripts/hls/ndvi/
 
     Ignition temp dependent on type of fuel?
+    Also should we consider random ignition? Randomness still depending on the fire triangle..
 
+2. wind dynamics... influence on different parameters or only mu
 
-    Also should we consider random ignition? Randomness still depending on the fire triangle?
+3. extinguish if F == 0 AND or OR O == 0 ?
 
-2. 
+4. dF und dO how to set? (videos?? - task 5)
+    multiplication factor... exponential decay - up to us
+
+5. Parameter units? T in ..., cell size... zur zeit 88m pro pixel
+
+6. 
 
 
 
