@@ -1,5 +1,6 @@
 appnope==0.1.4
 asttokens==3.0.1
+attrs==26.1.0
 certifi==2026.2.25
 charset-normalizer==3.4.7
 comm==0.2.3
@@ -9,6 +10,7 @@ debugpy==1.8.20
 decorator==5.2.1
 executing==2.2.1
 fonttools==4.62.1
+future==1.0.0
 idna==3.11
 ipykernel==7.2.0
 ipython==9.12.0
@@ -34,12 +36,16 @@ pure_eval==0.2.3
 Pygments==2.20.0
 pyparsing==3.3.2
 python-dateutil==2.9.0.post0
+PyYAML==6.0.3
 pyzmq==27.1.0
 requests==2.33.1
 requests-oauthlib==2.0.0
+scipy==1.17.1
 six==1.17.0
 stack-data==0.6.3
+tifffile==2026.4.11
 tornado==6.5.5
+tqdm==4.67.3
 traitlets==5.14.3
 urllib3==2.6.3
 wcwidth==0.6.0

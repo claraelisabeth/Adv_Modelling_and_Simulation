@@ -1,7 +1,18 @@
-venvAMS/
-FireSpreadingAdvanced.pdf
-data/
-parameter_calibration.ipynb
-.DS_Store
+# Your environments and secrets
+.venv/      
+venv/      
+.env      
+pyvenv.cfg 
+
+# Python & OS junk
 __pycache__/
-*.gif
+*.pyc
+*.pyo       
+*.pyd       
+.DS_Store
+
+# specific files (Generated output)
+fire.gif
+report.log
+fire_Optimizer.py
+fire_simulation.gif
