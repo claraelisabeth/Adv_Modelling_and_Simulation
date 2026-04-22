@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-import pyswarms as ps
 
 
 H, F, O, B, W = 0, 1, 2, 3, 4
