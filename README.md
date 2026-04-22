@@ -153,9 +153,25 @@ $$
 - Verify its influence on spreading
 
 ### Task 3
-- Build interface for **real landscape data**
-- Load & rasterize satellite data
-- Estimate initial fuel per cell
+NDVI:[2]
+used to calculate fuel types.
+*Values close to zero (-0.1 to 0.1) generally correspond to barren areas of rock, sand, or snow. Low, positive values represent shrub and grassland (approximately 0.2 to 0.4), while high values indicate temperate and tropical rainforests (values approaching 1). It is a good proxy for live green vegetation*
+NDWI:[3]
+used to calculate water bodies:
+Values description: Index values greater than 0.5 usually correspond to water bodies. Vegetation usually corresponds to much smaller values and built-up areas to values between zero and 0.2. 
+NDBI:[4]
+used to get the burn scar from the real data
+The Delta NBR (dNBR) is then determined through the difference between the pre and post-fire NBR composites.
+Class	dNBR range (multiplied by 1000)
+Unburned or Regrowth	< 100
+Low severity	100 - 270
+Moderate low severity	270 - 440
+Moderate high severity	440 - 660
+High severity	>=660
+NDMI: [5]
+The NDMI is a Normalized Difference Moisture Index that uses NIR and SWIR bands to monitor vegetation moisture levels. While the NDWI is primarily used to identify open water bodies, the NDMI describes differences in the water content of leaves. This index is used to calculate values for the additional state I added, W (Leaf Water Content). This state models the physical requirement that leaf water must first evaporate before the fuel can ignite, and creates a more significant distinction between fuel types. This variable could also be utilized later to model the impact of rain. I hope this will be sufficient and we therefore will not be forced to do cell specific ignition temperatures.
+
+
 
 ### Task 5
 - Compare with real wildfire videos/images
@@ -210,7 +226,9 @@ https://www.youtube.com/watch?v=DKGodqDs9sA&t=189
     *Values close to zero (-0.1 to 0.1) generally correspond to barren areas of rock, sand, or snow. Low, positive values represent shrub and grassland (approximately 0.2 to 0.4), while high values indicate temperate and tropical rainforests (values approaching 1). It is a good proxy for live green vegetation*
     https://custom-scripts.sentinel-hub.com/custom-scripts/hls/ndvi/
 
-    Ignition temp dependent on type of fuel?
+   I think there needs to be an extinction_fuel_ratio and an extinction_oxygen threshold otherwise the fire will not go out for a very long time. Extinction_oxygen could be fixed if we look up a reasonable value. For the fuel, I think there needs to be a ratio rather than a single value; otherwise, we won't give grassland a chance to burn. It should be a ratio relative to the fuel that is present at the beginning.
+
+    
     Also should we consider random ignition? Randomness still depending on the fire triangle..
 
 2. wind dynamics... influence on different parameters or only mu
@@ -238,9 +256,9 @@ This can be written nicer later on
 
 [3] https://custom-scripts.sentinel-hub.com/custom-scripts/planet/planetscope/ndwi/
 
-[4] 
+[4] https://forest-fire.emergency.copernicus.eu/about-effis/technical-background/fire-severity 
 
-[5]
+[5] https://custom-scripts.sentinel-hub.com/custom-scripts/sentinel-2/ndmi/
 
 [6]
 

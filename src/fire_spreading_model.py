@@ -1,14 +1,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import pyswarms as ps
 
-H, F, O, B = 0, 1, 2, 3
+
+H, F, O, B, W = 0, 1, 2, 3, 4
 
 class FireSpreadingAdvanced:
     '''
     Class for....
     '''
-    def __init__(self, n, m, max_H, max_F, max_O, mu_H, mu_O, dF, dO, ignition_temp=0.3, ignition_oxy = 0.76, ignition_fuel = 0.01,  wind = [0.5,0.5], start_cells=[(0,0)], random_F=False, fuel_mask=None, water_mask=None):
+    def __init__(self, n, m, max_H, max_F, max_O, mu_H, mu_O, dF, dO, dW, ignition_temp=0.3, ignition_oxy = 0.76, ignition_fuel = 0.3, extinction_fuel_ratio = 0.15, extinction_oxy = 0.05, wind = [0.5,0.5], start_cells=[(0,0)], random_F=False, fuel_mask=None, water_mask=None, moisture_mask=None):
         self.n = n
         self.m = m
         self.max_H = max_H
@@ -16,8 +18,10 @@ class FireSpreadingAdvanced:
         self.max_O = max_O
         self.mu_H = mu_H
         self.mu_O = mu_O
+        self.dW = dW
         self.water_mask = water_mask
         self.fuel_mask = fuel_mask
+        self.moisture_mask = moisture_mask
 
         if (sum(self.mu_O) != 1) or (sum(self.mu_H) != 1):
             print("Warning: The sum over the vector entries must be equal to one.")
@@ -29,8 +33,10 @@ class FireSpreadingAdvanced:
         self.ignition_temp = ignition_temp
         self.ignition_oxy = ignition_oxy
         self.ignition_fuel = ignition_fuel
+        self.extinction_fuel_ratio = extinction_fuel_ratio
+        self.extinction_oxy = extinction_oxy
 
-        self.state = np.zeros((n, m, 4))
+        self.state = np.zeros((n, m, 5))  # H, F, O, B, W
  
         self.state[:, :, O] = self.max_O   
 
@@ -39,27 +45,28 @@ class FireSpreadingAdvanced:
             self.state[cell[0], cell[1], B] = 1
         
         if fuel_mask is not None:
-            self.state[:, :, F] = np.maximum(0, fuel_mask)
+            self.initial_fuel = np.maximum(0, fuel_mask).copy()
+            self.state[:, :, F] = self.initial_fuel.copy()
             if water_mask is not None:
                 self.state[:, :, F][water_mask > 0.1] = 0
+                self.initial_fuel[water_mask > 0.1] = 0
+
         elif random_F:
             raw = np.random.uniform(0, 1, (n, m))
-
             for _ in range(2):
-                raw = (
-                    raw +
-                    np.roll(raw, 1, axis=0) +
-                    np.roll(raw, -1, axis=0) +
-                    np.roll(raw, 1, axis=1) +
-                    np.roll(raw, -1, axis=1)
-                ) / 5
-
+                raw = (raw + np.roll(raw, 1, axis=0) + np.roll(raw, -1, axis=0) +
+                       np.roll(raw, 1, axis=1) + np.roll(raw, -1, axis=1)) / 5
             self.state[:, :, F] = self.max_F * raw
+            self.initial_fuel = self.state[:, :, F].copy()
+            
         else:
             self.state[:, :, F] = self.max_F
+            self.initial_fuel = np.full((n, m), self.max_F)
 
-        self.diff_state= np.copy(self.state)
+        self.diff_state = np.copy(self.state)
 
+        if moisture_mask is not None:
+            self.state[:, :, W] = moisture_mask
 
 
     def compute_mu_with_wind(self, wx, wy, base_mu):
@@ -188,6 +195,9 @@ class FireSpreadingAdvanced:
         state_new = np.copy(self.state)
 
         F_state = self.state[:, :, F]
+        F_start = self.initial_fuel
+        fuel_ratio = F_state / (F_start + 1e-6) # avoid division by zero
+        fuel_effect = np.clip(fuel_ratio, 0, 1) # ensure between 0 and 1
 
         H_diff = self.diff_state[:, :, H]
         O_diff = self.diff_state[:, :, O]
@@ -202,7 +212,7 @@ class FireSpreadingAdvanced:
         state_new[:, :, H][burning] = self.max_H
 
         # 3. check if the fire is extinguished
-        extinguish = (state_new[:, :, F] == 0) | (state_new[:, :, O] == 0)
+        extinguish = (fuel_ratio < self.extinction_fuel_ratio) | (state_new[:, :, O] < self.extinction_oxy)
         state_new[:, :, B][burning & extinguish] = 0
 
         
@@ -210,13 +220,17 @@ class FireSpreadingAdvanced:
 
         # check conditions if the cell ignites, if the cell ignites set B to 1 and H to max_H
         # conditions:
-        if self.water_mask is not None:
-            ndwi_val = self.water_mask
-            dynamic_ignition_temp = self.ignition_temp * (1.0 + ndwi_val)
-        else:
-            dynamic_ignition_temp = self.ignition_temp
+        
+        # water (inside of plants) has to eveporate = be zero to ignite
+        evaporation_mask = (not_burning & (self.state[:, :, W] > 0) & (self.diff_state[:, :, H] > 0))
+
+        #decremnent the water level
+        state_new[:, :, W][evaporation_mask] = np.maximum(0, self.state[evaporation_mask, W] - self.dW)
+
+     
         ignite = (
-            (H_diff > dynamic_ignition_temp) &
+            (state_new[:, :, W] == 0) & 
+            (H_diff > self.ignition_temp) &
             (F_state > self.ignition_fuel) &
             (O_diff > self.ignition_oxy)
         )
@@ -234,33 +248,40 @@ class FireSpreadingAdvanced:
 
         self.state = state_new
 
-
-
-
-    
     def make_rgb(self):
         fire = self.state[:, :, B]
         fuel = self.state[:, :, F]
         heat = self.state[:, :, H]
+        water_mask = self.water_mask
+        F_start = self.initial_fuel
+        fuel_ratio = fuel / (F_start + 1e-6)
 
         rgb = np.zeros((self.state.shape[0], self.state.shape[1], 3))
 
-        # red = fire + heat glow
-        rgb[:, :, 0] = fire + 0.5 * heat
+        # beige = rocks (otherwise there areas black pixes from the beginning)
+        rgb = np.zeros((self.state.shape[0], self.state.shape[1], 3))
+        rgb[:] = [0.3, 0.3, 0]
 
-        # green = fuel
-        rgb[:, :, 1] = fuel
-
-        # blue = water or nothing
+        # blue = water
         if self.water_mask is not None:
-            rgb[:, :, 2][self.water_mask > 0.5] = 1.0
-        else:
-            rgb[:, :, 2] = 0
+            water_mask = (self.water_mask > 0.5)
+            rgb[water_mask] = [0, 0, 1]
+
+        # black = burnt areas
+        fuel_ratio = fuel / (F_start + 1e-6)
+        burnt_mask = (fuel_ratio <= self.extinction_fuel_ratio) & (F_start > 0.2)
+        rgb[burnt_mask] = [0, 0, 0]
+        
+        # green = living fuel
+        living_mask = (fuel_ratio > self.extinction_fuel_ratio) & (F_start > 0.2)
+        rgb[living_mask, 1] = fuel[living_mask]
+
+        # red = fire + heat glow
+        rgb[:, :, 0] += fire + 0.4 * heat
+        rgb[:, :, 1] += 0.2 * fire
 
         return np.clip(rgb, 0, 1)
-
-
-
+    
 
     def run_simulation(self, T, gif_name = "fire"):
 
@@ -282,8 +303,14 @@ class FireSpreadingAdvanced:
         ani = animation.ArtistAnimation(fig, frames, interval=100, blit=True)
 
         ani.save(gif_name+".gif", writer="pillow")
-        
+
+    def visualize_burn_mask(self):
+        fuel_ratio = self.state[:, :, F] / (self.initial_fuel + 1e-6)
+        burn_mask = (self.state[:, :, B] == 1) | (fuel_ratio <= self.extinction_fuel_ratio)
+
+        plt.figure(figsize=(5,5))
+        plt.imshow(burn_mask, cmap='hot', interpolation='nearest')
+        plt.title("Burn Mask")
+        plt.show()
 
 
-
-    
