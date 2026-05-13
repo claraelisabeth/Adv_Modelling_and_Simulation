@@ -214,6 +214,5 @@ class sentinel_client:
 
         return color_mask, binary_burned_mask
     
-    
 
 

@@ -15,8 +15,8 @@ class FireSpreadingAdvanced:
         self.max_H = max_H
         self.max_F = max_F
         self.max_O = max_O
-        self.mu_H = mu_H
-        self.mu_O = mu_O
+        self.mu_H = self._build_mu(mu_H)
+        self.mu_O = self._build_mu(mu_O)
         self.dW = dW
         self.water_mask = water_mask
         self.fuel_mask = fuel_mask
@@ -68,6 +68,26 @@ class FireSpreadingAdvanced:
 
         if moisture_mask is not None:
             self.state[:, :, W] = moisture_mask
+
+    def _build_mu(self, mu):
+        """
+        Build symmetric diffusion kernel.
+        If mu is a scalar, it is interpreted as the center retention
+        coefficient and the remaining weight is distributed equally
+        among the four neighboring cells.
+        """
+
+        if np.isscalar(mu):
+            mu_neighbor = (1 - mu) / 4
+            return [
+                mu,
+                mu_neighbor,
+                mu_neighbor,
+                mu_neighbor,
+                mu_neighbor
+            ]
+
+        return mu
 
 
     def compute_mu_with_wind(self, wx, wy, base_mu):
