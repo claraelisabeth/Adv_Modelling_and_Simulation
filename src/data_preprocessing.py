@@ -127,6 +127,55 @@ class sentinel_client:
             print(f"Error: {response.status_code}, {response.text}")
             return None
         
+    def get_topo(self, lon_min, lat_min, lon_max, lat_max, width, height):
+        """
+        Fetches Digital Elevation Model (DEM) data from Copernicus.
+        Returns a 2D numpy array with elevation in meters.
+        """
+        data = {
+            "input": {
+                "bounds": {
+                    "properties": {"crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"},
+                    "bbox": [lon_min, lat_min, lon_max, lat_max]
+                },
+                "data": [{
+                    "type": "dem",
+                    "dataFilter": {
+                        "demInstance": "COPERNICUS_30" # 30m Auflösung ist ideal für Waldbrand
+                    }
+                }]
+            },
+            "output": {
+                "width": width, "height": height,
+                "responses": [{
+                    "identifier": "default",
+                    "format": {"type": "image/tiff"}
+                }]
+            },
+            "evalscript": """
+                //VERSION=3
+                function setup() {
+                  return {
+                    input: ["DEM"],
+                    output: { bands: 1, sampleType: "FLOAT32" }
+                  };
+                }
+                function evaluatePixel(sample) {
+                  return [sample.DEM];
+                }
+            """
+        }
+
+        response = self.oauth.post(self.url, json=data)
+
+        if response.status_code == 200:
+            # Das TIFF enthält die Höhenmeter direkt als Float32
+            image = tifffile.imread(io.BytesIO(response.content))
+            return image
+        else:
+            print(f"Error fetching DEM: {response.status_code}, {response.text}")
+            return None
+        
     def get_simulation_time(self, fire_start_date, observation_end_date):
         """
         Calculates the number of days between two date strings.
@@ -137,3 +186,34 @@ class sentinel_client:
         delta = d2 - d1
 
         return abs(delta.days)
+    
+    def get_severity_mask(self, dnbr_array):
+        h, w = dnbr_array.shape
+        color_mask = np.zeros((h, w, 3))
+        colors = {
+            "enhanced_high": [0.2, 0.4, 0.1],   
+            "enhanced_low":  [0.7, 0.8, 0.5],   
+            "unburned":      [0.6, 1.0, 0.4],  
+            "low":           [1.0, 1.0, 0.2],   
+            "mod_low":       [1.0, 0.6, 0.2],    
+            "mod_high":      [0.9, 0.2, 0.2],   
+            "high":          [0.7, 0.0, 0.7]     
+        }
+
+        # thresholds based on standard dNBR classification
+        color_mask[dnbr_array <= -0.251] = colors["enhanced_high"]
+        color_mask[(dnbr_array > -0.251) & (dnbr_array <= -0.101)] = colors["enhanced_low"]
+        color_mask[(dnbr_array > -0.100) & (dnbr_array <= 0.099)] = colors["unburned"]
+        color_mask[(dnbr_array >= 0.100) & (dnbr_array <= 0.269)] = colors["low"]
+        color_mask[(dnbr_array >= 0.270) & (dnbr_array <= 0.439)] = colors["mod_low"]
+        color_mask[(dnbr_array >= 0.440) & (dnbr_array <= 0.659)] = colors["mod_high"]
+        color_mask[dnbr_array >= 0.660] = colors["high"]
+
+        # create binary mask for burned vs unburned (threshold at 0.270)
+        binary_burned_mask = np.where(dnbr_array >= 0.270, 1, 0)
+
+        return color_mask, binary_burned_mask
+    
+    
+
+

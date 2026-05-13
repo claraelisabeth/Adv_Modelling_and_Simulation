@@ -9,7 +9,7 @@ class FireSpreadingAdvanced:
     '''
     Class for....
     '''
-    def __init__(self, n, m, max_H, max_F, max_O, mu_H, mu_O, dF, dO, dW, ignition_temp=0.3, ignition_oxy = 0.76, ignition_fuel = 0.3, extinction_fuel_ratio = 0.15, extinction_oxy = 0.05, wind = [0.5,0.5], start_cells=[(0,0)], random_F=False, fuel_mask=None, water_mask=None, moisture_mask=None):
+    def __init__(self, n, m, max_H, max_F, max_O, mu_H, mu_O, dF, dO, dW, ignition_temp=0.3, ignition_oxy = 0.76, ignition_fuel = 0.3, extinction_fuel_ratio = 0.15, extinction_oxy = 0.05, wind = [0.5,0.5], start_cells=[(0,0)], random_F=False, fuel_mask=None, water_mask=None, moisture_mask=None, topo_mask=None, k_slope=0.1, wind_strength_factor=0):
         self.n = n
         self.m = m
         self.max_H = max_H
@@ -21,7 +21,9 @@ class FireSpreadingAdvanced:
         self.water_mask = water_mask
         self.fuel_mask = fuel_mask
         self.moisture_mask = moisture_mask
-
+        self.topo_mask = topo_mask
+        self.wind_strength_factor = wind_strength_factor
+        self.k_slope = k_slope
         if (sum(self.mu_O) != 1) or (sum(self.mu_H) != 1):
             print("Warning: The sum over the vector entries must be equal to one.")
 
@@ -70,10 +72,20 @@ class FireSpreadingAdvanced:
 
     def compute_mu_with_wind(self, wx, wy, base_mu):
         '''
-        Diffusion Phase
-        bla bla
-        Output:....
+        wx, wy: Wind vectors
+        sx, sy: Slope gradients from topo_mask
         '''
+        # wind effect
+        wx = wx * self.wind_strength_factor
+        wy = wy * self.wind_strength_factor
+
+        # slope effect
+        if self.topo_mask is not None:
+            sy, sx = np.gradient(self.topo_mask)
+
+            wx = wx + (np.tanh(sx) * self.k_slope)
+            wy = wy + (np.tanh(sy) * self.k_slope)
+        
         base = np.array(base_mu, dtype=float)
 
         # scalar wind -> return a 1D mu vector (length 5)
@@ -112,9 +124,6 @@ class FireSpreadingAdvanced:
 
         return mu_arr
     
-
-
-
     def diffuse(self):
         diff_state = np.copy(self.state)
 
@@ -303,13 +312,16 @@ class FireSpreadingAdvanced:
 
         ani.save(gif_name+".gif", writer="pillow")
 
-    def visualize_burn_mask(self):
-        fuel_ratio = self.state[:, :, F] / (self.initial_fuel + 1e-6)
-        burn_mask = (self.state[:, :, B] == 1) | (fuel_ratio <= self.extinction_fuel_ratio)
+    def calculate_simulation_burned_mask(self):
+        """
+        check is a cell is water
+        if fuel ratio is lower than extinction_fuel_ratio, the cell is considered burned
+        """
+        fuel = self.state[:, :, F]
+        fuel_ratio = fuel / (self.initial_fuel + 1e-6)
 
-        plt.figure(figsize=(5,5))
-        plt.imshow(burn_mask, cmap='hot', interpolation='nearest')
-        plt.title("Burn Mask")
-        plt.show()
-
-
+        has_fuel = self.initial_fuel > 1e-6
+        fuel_ratio = fuel / (self.initial_fuel + 1e-6)  # Avoid division by zero
+        
+        burned_mask = has_fuel & ((self.state[:, :, B] == 1) | (fuel_ratio <= self.extinction_fuel_ratio))
+        return burned_mask
