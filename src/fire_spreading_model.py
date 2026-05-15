@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+<<<<<<< Updated upstream
 
 
 H, F, O, B, W = 0, 1, 2, 3, 4
@@ -24,6 +25,119 @@ class FireSpreadingAdvanced:
         self.topo_mask = topo_mask
         self.wind_strength_factor = wind_strength_factor
         self.k_slope = k_slope
+=======
+from dataclasses import dataclass
+from typing import Sequence, Union
+
+
+H, F, O, B, W = 0, 1, 2, 3, 4
+# H: heat level
+# F: fuel level
+# O: oxygen level
+# B: burning state (0 or 1)
+# W: water/moisture level (optional)
+
+
+@dataclass
+class Parameters:
+    """
+    A class holding all parameters for the simulation.
+
+    Attributes
+    ----
+    n : int
+        Number of grid rows.
+    m : int
+        Number of grid columns.
+    mu_H : float or ArrayLike of length 5
+        Heat diffusion coefficient(s). Can be a scalar for isotropic diffusion, or a 5-element vector specifying
+        diffusion weights for [center, up, down, left, right].
+    mu_O : float or ArrayLike of length 5
+        Oxygen diffusion coefficient(s), with the same format as `mu_H`.
+    dF : float
+        Amount of fuel consumed per timestep during burning.
+    dO : float
+        Amount of oxygen consumed per timestep during burning.
+    dW : float
+        Amount of water/moisture evaporated per timestep.
+    ignition_temp : float
+        Minimum heat required for ignition.
+    ignition_oxy : float
+        Minimum oxygen level required for ignition.
+    ignition_fuel : float
+        Minimum fuel level required for ignition.
+    extinction_fuel_ratio : float
+        Fire extinguishes when fuel falls below this fraction of `max_F`.
+    extinction_oxy : float
+        Fire extinguishes when oxygen falls below this threshold.
+    wind : tuple[float, float], optional
+        Uniform wind vector `(wx, wy)` influencing fire spread direction.
+    start_cells : list[tuple[int, int]], optional
+        Grid coordinates where fire is initially ignited. Default is [(0,0)].
+    random_F : bool
+        If True, initialize fuel values randomly instead of uniformly using `max_F`. Default is False.
+    fuel_mask : np.ndarray, optional
+        Spatial distribution of fuel availability.
+    water_mask : np.ndarray, optional
+        Spatial distribution of water bodies or non-burnable regions.
+    moisture_mask : np.ndarray, optional
+        Spatial distribution of moisture levels affecting combustion.
+    topo_mask : np.ndarray, optional
+        Terrain elevation map used to compute slope effects.
+    k_slope : float
+        Scaling factor controlling the influence of terrain slope on diffusion. Default is 0.1.
+    wind_strength_factor : float
+        Scaling factor controlling the influence of wind on diffusion. Default is 0.
+    """
+    n : int
+    m : int
+    mu_H : Union[float, Sequence[float]]
+    mu_O : Union[float, Sequence[float]]
+    dF : float
+    dO : float
+    dW : float
+    ignition_temp : float = 0.3
+    ignition_oxy : float = 0.76
+    ignition_fuel : float = 0.3
+    extinction_fuel_ratio : float = 0.15
+    extinction_oxy : float = 0.05
+    wind : tuple[float, float] = (0.0, 0.0)
+    start_cells : list[tuple[int, int]] = None
+    random_F : bool = False
+    fuel_mask : np.ndarray = None
+    water_mask : np.ndarray = None
+    moisture_mask : np.ndarray = None
+    topo_mask : np.ndarray = None
+    k_slope : float = 0.1
+    wind_strength_factor : float = 0
+
+    def __post_init__(self):
+        if self.start_cells is None:
+            self.start_cells = [(0,0)]
+
+
+class FireSpreadingAdvanced:
+    """
+    Simulates wildfire spreading on a 2D grid using diffusion and combustion dynamics, including the effects of wind,
+    terrain slope, and moisture.
+    """
+
+    def __init__(self, param: Parameters):
+        self.n = param.n
+        self.m = param.m
+        self.max_H = 1.0
+        self.max_F = 1.0
+        self.max_O = 1.0
+        self.mu_H = self._build_mu(param.mu_H)
+        self.mu_O = self._build_mu(param.mu_O)
+        self.dW = param.dW
+        self.water_mask = param.water_mask
+        self.fuel_mask = param.fuel_mask
+        self.moisture_mask = param.moisture_mask
+        self.topo_mask = param.topo_mask
+        self.wind_strength_factor = param.wind_strength_factor
+        self.k_slope = param.k_slope
+>>>>>>> Stashed changes
         if (sum(self.mu_O) != 1) or (sum(self.mu_H) != 1):
             print("Warning: The sum over the vector entries must be equal to one.")
 
