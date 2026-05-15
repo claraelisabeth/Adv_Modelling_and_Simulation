@@ -4,11 +4,96 @@ import matplotlib.animation as animation
 
 
 H, F, O, B, W = 0, 1, 2, 3, 4
+# H: heat level
+# F: fuel level
+# O: oxygen level
+# B: burning state (0 or 1)
+# W: water/moisture level (optional)
 
 class FireSpreadingAdvanced:
-    '''
-    Class for....
-    '''
+    """
+    Simulates wildfire spreading on a 2D grid using diffusion and combustion
+    dynamics, including the effects of wind, terrain slope, and moisture.
+
+    Parameters
+    ----------
+    n : int
+        Number of grid rows.
+
+    m : int
+        Number of grid columns.
+
+    max_H : float
+        Maximum heat value per cell.
+
+    max_F : float
+        Maximum fuel value per cell.
+
+    max_O : float
+        Maximum oxygen value per cell.
+
+    mu_H : float or array-like of length 5
+        Heat diffusion coefficient(s). Can be:
+        - a scalar for isotropic diffusion, or
+        - a 5-element vector specifying diffusion weights for
+          [center, up, down, left, right].
+
+    mu_O : float or array-like of length 5
+        Oxygen diffusion coefficient(s), with the same format as `mu_H`.
+
+    dF : float
+        Amount of fuel consumed per timestep during burning.
+
+    dO : float
+        Amount of oxygen consumed per timestep during burning.
+
+    dW : float
+        Amount of water/moisture evaporated per timestep.
+
+    ignition_temp : float
+        Minimum heat required for ignition.
+
+    ignition_oxy : float
+        Minimum oxygen level required for ignition.
+
+    ignition_fuel : float
+        Minimum fuel level required for ignition.
+
+    extinction_fuel_ratio : float
+        Fire extinguishes when fuel falls below this fraction of `max_F`.
+
+    extinction_oxy : float
+        Fire extinguishes when oxygen falls below this threshold.
+
+    wind : tuple[float, float], optional
+        Uniform wind vector `(wx, wy)` influencing fire spread direction.
+
+    start_cells : list[tuple[int, int]], optional
+        Grid coordinates where fire is initially ignited.
+
+    random_F : bool, default=False
+        If True, initialize fuel values randomly instead of uniformly using
+        `max_F`.
+
+    fuel_mask : ndarray, optional
+        Spatial distribution of fuel availability.
+
+    water_mask : ndarray, optional
+        Spatial distribution of water bodies or non-burnable regions.
+
+    moisture_mask : ndarray, optional
+        Spatial distribution of moisture levels affecting combustion.
+
+    topo_mask : ndarray, optional
+        Terrain elevation map used to compute slope effects.
+
+    k_slope : float, default=1.0
+        Scaling factor controlling the influence of terrain slope on diffusion.
+
+    wind_strength_factor : float, default=1.0
+        Scaling factor controlling the influence of wind on diffusion.
+    """
+
     def __init__(self, n, m, max_H, max_F, max_O, mu_H, mu_O, dF, dO, dW, ignition_temp=0.3, ignition_oxy = 0.76, ignition_fuel = 0.3, extinction_fuel_ratio = 0.15, extinction_oxy = 0.05, wind = [0.5,0.5], start_cells=[(0,0)], random_F=False, fuel_mask=None, water_mask=None, moisture_mask=None, topo_mask=None, k_slope=0.1, wind_strength_factor=0):
         self.n = n
         self.m = m
@@ -69,12 +154,26 @@ class FireSpreadingAdvanced:
         if moisture_mask is not None:
             self.state[:, :, W] = moisture_mask
 
+
     def _build_mu(self, mu):
         """
-        Build symmetric diffusion kernel.
-        If mu is a scalar, it is interpreted as the center retention
+        Build symmetric diffusion kernel.  If mu is a scalar, it is interpreted as the center retention
         coefficient and the remaining weight is distributed equally
         among the four neighboring cells.
+
+        Parameters
+        ----------
+        mu : float or array-like of length 5
+             Diffusion coefficient(s). Can be:
+             - a scalar for isotropic diffusion, or
+             - a 5-element vector specifying diffusion weights for
+               [center, up, down, left, right].
+
+        Returns
+        -------
+        list or array
+            A 5-element list or array of diffusion coefficients corresponding to
+            [center, up, down, left, right].
         """
 
         if np.isscalar(mu):
@@ -90,10 +189,20 @@ class FireSpreadingAdvanced:
         return mu
 
 
-    def compute_mu_with_wind(self, wx, wy, base_mu):
+    def _compute_mu_with_wind_slope(self, wx, wy, base_mu):
         '''
+        Compute diffusion coefficients with wind and slope effects for each cell.
+
+        Parameters
+        ----------
         wx, wy: Wind vectors
-        sx, sy: Slope gradients from topo_mask
+        sx, sy: Slope gradients from topo_mask (taken from self.topo_mask)
+
+        Returns
+        -------
+        array
+            A 5-element array of diffusion coefficients corresponding to
+            [center, up, down, left, right].
         '''
         # wind effect
         wx = wx * self.wind_strength_factor
@@ -122,6 +231,7 @@ class FireSpreadingAdvanced:
                 mu /= total
             return mu
 
+        # TODO: delete
         # per-cell wind field: expect wx, wy arrays of shape (n, m)
         wx_arr = np.array(wx)
         wy_arr = np.array(wy)
@@ -144,20 +254,25 @@ class FireSpreadingAdvanced:
 
         return mu_arr
     
-    def diffuse(self):
+    
+    def _diffuse(self):
+        '''
+        Compute diffusion for heat and oxygen based on the current state, wind, and slope.
+        '''
         diff_state = np.copy(self.state)
 
         H_state = self.state[:, :, H]
         O_state = self.state[:, :, O]
 
+        # TODO: delete
         if isinstance(self.wind, (tuple, list)):
             wx, wy = self.wind
         else:
             wx = self.wind[:, :, 0]
             wy = self.wind[:, :, 1]
 
-        mu_H = self.compute_mu_with_wind(wx, wy, self.mu_H)
-        mu_O = self.compute_mu_with_wind(wx, wy, self.mu_O)
+        mu_H = self._compute_mu_with_wind_slope(wx, wy, self.mu_H)
+        mu_O = self._compute_mu_with_wind_slope(wx, wy, self.mu_O)
         
         H_pad = np.pad(H_state, 1, mode='edge')
         O_pad = np.pad(O_state, 1, mode='edge')
@@ -218,13 +333,18 @@ class FireSpreadingAdvanced:
 
 
 
-    def burning(self):
+    def _burning(self):
+        '''
+        Update the state of the grid based on burning dynamics, including fuel consumption, 
+        heat generation, and fire spread to neighboring cells based on ignition conditions.
+        '''
 
         state_new = np.copy(self.state)
 
         F_state = self.state[:, :, F]
         F_start = self.initial_fuel
         fuel_ratio = F_state / (F_start + 1e-6) # avoid division by zero
+        # TODO: delete?
         fuel_effect = np.clip(fuel_ratio, 0, 1) # ensure between 0 and 1
 
         H_diff = self.diff_state[:, :, H]
@@ -276,7 +396,18 @@ class FireSpreadingAdvanced:
 
         self.state = state_new
 
-    def make_rgb(self):
+
+    def _make_rgb(self):
+        '''
+        Create an RGB image representation of the current state for visualization.
+
+        Color scheme:
+        - Beige: rocks or non-burnable areas (default background)
+        - Blue: water bodies or high moisture areas
+        - Black: burnt areas (low fuel ratio)
+        - Green: living fuel (intensity based on fuel level)
+        - Red: active fire and heat glow (intensity based on heat level)
+        '''
         fire = self.state[:, :, B]
         fuel = self.state[:, :, F]
         heat = self.state[:, :, H]
@@ -312,18 +443,18 @@ class FireSpreadingAdvanced:
     
 
     def run_simulation(self, T, gif_name = "fire"):
-
+        '''
+        Run the fire spreading simulation for T timesteps and save the result as a GIF.
+        '''
         fig, ax = plt.subplots()
-        img = ax.imshow(self.make_rgb())
+        img = ax.imshow(self._make_rgb())
 
         frames = []
 
         for _ in range(T):
-            #self.diffuse_loop()
-            #self.burning_loop()
 
-            self.diffuse()
-            self.burning()
+            self._diffuse()
+            self._burning()
 
             frame = [ax.imshow(self.make_rgb(), animated=True)]
             frames.append(frame)
@@ -331,6 +462,7 @@ class FireSpreadingAdvanced:
         ani = animation.ArtistAnimation(fig, frames, interval=100, blit=True)
 
         ani.save(gif_name+".gif", writer="pillow")
+
 
     def calculate_simulation_burned_mask(self):
         """
