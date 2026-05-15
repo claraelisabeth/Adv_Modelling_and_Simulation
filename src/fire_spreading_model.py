@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from dataclasses import dataclass
 
 
 H, F, O, B, W = 0, 1, 2, 3, 4
@@ -10,135 +11,136 @@ H, F, O, B, W = 0, 1, 2, 3, 4
 # B: burning state (0 or 1)
 # W: water/moisture level (optional)
 
-class FireSpreadingAdvanced:
-    """
-    Simulates wildfire spreading on a 2D grid using diffusion and combustion
-    dynamics, including the effects of wind, terrain slope, and moisture.
 
-    Parameters
-    ----------
+@dataclass
+class Parameters:
+    """
+    A class holding all parameters for the simulation.
+
+    Attributes
+    ----
     n : int
         Number of grid rows.
-
     m : int
         Number of grid columns.
-
-    max_H : float
-        Maximum heat value per cell.
-
-    max_F : float
-        Maximum fuel value per cell.
-
-    max_O : float
-        Maximum oxygen value per cell.
-
-    mu_H : float or array-like of length 5
-        Heat diffusion coefficient(s). Can be:
-        - a scalar for isotropic diffusion, or
-        - a 5-element vector specifying diffusion weights for
-          [center, up, down, left, right].
-
-    mu_O : float or array-like of length 5
+    mu_H : float or ArrayLike of length 5
+        Heat diffusion coefficient(s). Can be a scalar for isotropic diffusion, or a 5-element vector specifying
+        diffusion weights for [center, up, down, left, right].
+    mu_O : float or ArrayLike of length 5
         Oxygen diffusion coefficient(s), with the same format as `mu_H`.
-
     dF : float
         Amount of fuel consumed per timestep during burning.
-
     dO : float
         Amount of oxygen consumed per timestep during burning.
-
     dW : float
         Amount of water/moisture evaporated per timestep.
-
     ignition_temp : float
         Minimum heat required for ignition.
-
     ignition_oxy : float
         Minimum oxygen level required for ignition.
-
     ignition_fuel : float
         Minimum fuel level required for ignition.
-
     extinction_fuel_ratio : float
         Fire extinguishes when fuel falls below this fraction of `max_F`.
-
     extinction_oxy : float
         Fire extinguishes when oxygen falls below this threshold.
-
     wind : tuple[float, float], optional
         Uniform wind vector `(wx, wy)` influencing fire spread direction.
-
     start_cells : list[tuple[int, int]], optional
-        Grid coordinates where fire is initially ignited.
-
-    random_F : bool, default=False
-        If True, initialize fuel values randomly instead of uniformly using
-        `max_F`.
-
-    fuel_mask : ndarray, optional
+        Grid coordinates where fire is initially ignited. Default is [(0,0)].
+    random_F : bool
+        If True, initialize fuel values randomly instead of uniformly using `max_F`. Default is False.
+    fuel_mask : np.ndarray, optional
         Spatial distribution of fuel availability.
-
-    water_mask : ndarray, optional
+    water_mask : np.ndarray, optional
         Spatial distribution of water bodies or non-burnable regions.
-
-    moisture_mask : ndarray, optional
+    moisture_mask : np.ndarray, optional
         Spatial distribution of moisture levels affecting combustion.
-
-    topo_mask : ndarray, optional
+    topo_mask : np.ndarray, optional
         Terrain elevation map used to compute slope effects.
+    k_slope : float
+        Scaling factor controlling the influence of terrain slope on diffusion. Default is 0.1.
+    wind_strength_factor : float
+        Scaling factor controlling the influence of wind on diffusion. Default is 0.
+    """
+    n : int
+    m : int
+    mu_H : float
+    mu_O : float
+    dF : float
+    dO : float
+    dW : float
+    ignition_temp : float = 0.3
+    ignition_oxy : float = 0.76
+    ignition_fuel : float = 0.3
+    extinction_fuel_ratio : float = 0.15
+    extinction_oxy : float = 0.05
+    wind : tuple[float, float] = (0.0, 0.0)
+    start_cells : list[tuple[int, int]] = None
+    random_F : bool = False
+    fuel_mask : np.ndarray = None
+    water_mask : np.ndarray = None
+    moisture_mask : np.ndarray = None
+    topo_mask : np.ndarray = None
+    k_slope : float = 0.1
+    wind_strength_factor : float = 0
 
-    k_slope : float, default=1.0
-        Scaling factor controlling the influence of terrain slope on diffusion.
+    def __post_init__(self):
+        if self.start_cells is None:
+            self.start_cells = [(0,0)]
 
-    wind_strength_factor : float, default=1.0
-        Scaling factor controlling the influence of wind on diffusion.
+
+class FireSpreadingAdvanced:
+    """
+    Simulates wildfire spreading on a 2D grid using diffusion and combustion dynamics, including the effects of wind,
+    terrain slope, and moisture.
     """
 
-    def __init__(self, n, m, max_H, max_F, max_O, mu_H, mu_O, dF, dO, dW, ignition_temp=0.3, ignition_oxy = 0.76, ignition_fuel = 0.3, extinction_fuel_ratio = 0.15, extinction_oxy = 0.05, wind = [0.5,0.5], start_cells=[(0,0)], random_F=False, fuel_mask=None, water_mask=None, moisture_mask=None, topo_mask=None, k_slope=0.1, wind_strength_factor=0):
-        self.n = n
-        self.m = m
-        self.max_H = max_H
-        self.max_F = max_F
-        self.max_O = max_O
-        self.mu_H = self._build_mu(mu_H)
-        self.mu_O = self._build_mu(mu_O)
-        self.dW = dW
-        self.water_mask = water_mask
-        self.fuel_mask = fuel_mask
-        self.moisture_mask = moisture_mask
-        self.topo_mask = topo_mask
-        self.wind_strength_factor = wind_strength_factor
-        self.k_slope = k_slope
+    def __init__(self, param):
+        self.n = param.n
+        self.m = param.m
+        self.max_H = 1.0
+        self.max_F = 1.0
+        self.max_O = 1.0
+        self.mu_H = self._build_mu(param.mu_H)
+        self.mu_O = self._build_mu(param.mu_O)
+        self.dW = param.dW
+        self.water_mask = param.water_mask
+        self.fuel_mask = param.fuel_mask
+        self.moisture_mask = param.moisture_mask
+        self.topo_mask = param.topo_mask
+        self.wind_strength_factor = param.wind_strength_factor
+        self.k_slope = param.k_slope
         if (sum(self.mu_O) != 1) or (sum(self.mu_H) != 1):
             print("Warning: The sum over the vector entries must be equal to one.")
 
-        self.wind = wind
+        self.wind = param.wind
 
-        self.dF = dF
-        self.dO = dO
-        self.ignition_temp = ignition_temp
-        self.ignition_oxy = ignition_oxy
-        self.ignition_fuel = ignition_fuel
-        self.extinction_fuel_ratio = extinction_fuel_ratio
-        self.extinction_oxy = extinction_oxy
+        self.dF = param.dF
+        self.dO = param.dO
+        self.ignition_temp = param.ignition_temp
+        self.ignition_oxy = param.ignition_oxy
+        self.ignition_fuel = param.ignition_fuel
+        self.extinction_fuel_ratio = param.extinction_fuel_ratio
+        self.extinction_oxy = param.extinction_oxy
 
-        self.state = np.zeros((n, m, 5))  # H, F, O, B, W
+        self.state = np.zeros((self.n, self.m, 5))  # H, F, O, B, W
  
         self.state[:, :, O] = self.max_O   
 
-        for cell in start_cells:
+        for cell in param.start_cells:
             self.state[cell[0], cell[1], H] = self.max_H
             self.state[cell[0], cell[1], B] = 1
         
-        if fuel_mask is not None:
-            self.initial_fuel = np.maximum(0, fuel_mask).copy()
+        if param.fuel_mask is not None:
+            self.initial_fuel = np.maximum(0, param.fuel_mask).copy()
             self.state[:, :, F] = self.initial_fuel.copy()
-            if water_mask is not None:
-                self.state[:, :, F][water_mask > 0.1] = 0
-                self.initial_fuel[water_mask > 0.1] = 0
+            if param.water_mask is not None:
+                self.state[:, :, F][param.water_mask > 0.1] = 0
+                self.initial_fuel[param.water_mask > 0.1] = 0
 
-        elif random_F:
-            raw = np.random.uniform(0, 1, (n, m))
+        elif param.random_F:
+            raw = np.random.uniform(0, 1, (param.n, param.m))
             for _ in range(2):
                 raw = (raw + np.roll(raw, 1, axis=0) + np.roll(raw, -1, axis=0) +
                        np.roll(raw, 1, axis=1) + np.roll(raw, -1, axis=1)) / 5
@@ -147,12 +149,12 @@ class FireSpreadingAdvanced:
             
         else:
             self.state[:, :, F] = self.max_F
-            self.initial_fuel = np.full((n, m), self.max_F)
+            self.initial_fuel = np.full((param.n, param.m), self.max_F)
 
         self.diff_state = np.copy(self.state)
 
-        if moisture_mask is not None:
-            self.state[:, :, W] = moisture_mask
+        if param.moisture_mask is not None:
+            self.state[:, :, W] = param.moisture_mask
 
 
     def _build_mu(self, mu):
@@ -456,7 +458,7 @@ class FireSpreadingAdvanced:
             self._diffuse()
             self._burning()
 
-            frame = [ax.imshow(self.make_rgb(), animated=True)]
+            frame = [ax.imshow(self._make_rgb(), animated=True)]
             frames.append(frame)
 
         ani = animation.ArtistAnimation(fig, frames, interval=100, blit=True)
