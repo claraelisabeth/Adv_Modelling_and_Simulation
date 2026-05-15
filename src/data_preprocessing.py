@@ -6,6 +6,7 @@ import io
 import matplotlib.pyplot as plt
 import numpy as np
 import tifffile
+from sentinelhub import DataCollection
 
 class sentinel_client:
     """
@@ -171,7 +172,10 @@ class sentinel_client:
         if response.status_code == 200:
             # Das TIFF enthält die Höhenmeter direkt als Float32
             image = tifffile.imread(io.BytesIO(response.content))
-            return image
+            if image.ndim == 3:
+                image = image[:, :, 0]
+
+            return image.astype(np.float32)
         else:
             print(f"Error fetching DEM: {response.status_code}, {response.text}")
             return None
