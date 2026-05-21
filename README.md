@@ -204,8 +204,45 @@ Minimize Methods https://docs.scipy.org/doc/scipy/reference/generated/scipy.opti
 Forest-fire model https://en.wikipedia.org/wiki/Forest-fire_model   
 Wikipedia article on forest fire modelling by using the Drossel–Schwabl forest fire model. 
 
-Cellular automata (CA) are discrete, computational models consisting of a regular grid of cells, each in one of a finite number of states (e.g., on/off). They evolve synchronously in discrete time steps based on local rules, where a cell's next state depends on its current state and its neighborhood's states. Following YouTube video explains it well.
-https://www.youtube.com/watch?v=DKGodqDs9sA&t=189 
+Different wildfire behaviours https://en.wikipedia.org/wiki/List_of_wildfire_behaviors  
+For example:  
+**Spotting**  
+Spotting refers to the transport of burning pieces of firebrand by wind which may ignite new fires beyond the main fire. Spotting requires wind, and the firebrand often comes from a torching tree. There are two types of spotting: short-range spotting and long-range spotting. Short-range spotting occurs when the spot fire is not very far from the main fire, so it gets overrun. In long-range spotting, firebrands are often carried by a convection column away from the main fire area. https://www.sciencedirect.com/science/article/pii/S0379711222001084 
+
+https://boku.ac.at/en/docservice/doctoral-studies/doktoratsschulen/hazards-and-risks-in-alpine-regions-under-global-change-hadrian/research/projects/evaluating-fire-modelling-approaches-for-estimating-forest-fire-behaviour-in-european-mountain-forests  
+Besides the reason for ignition of fire, a multitude of environmental conditions influence fire ignition and fire behaviour. Some of these are **terrain, slope, and aspect**. A fire tends to spread **more slowly on flat terrain** than on steep slopes. Then there is vertical and horizontal continuity, i.e., the **total combustible biomass**. One of the most important factors, especially for the assessment of fire behaviour, is **wind** (velocity and direction). Along with **humidity and temperature**, this is one of the meteorological factors that should be taken into account.
+
+**Fire Behaviour**[6]  
+Fire behaviour is affected by:
+1. *Fuel*
+    - Moisture content: Dead vegetation loses moisture more quickly than living vegetation and dryer fuels ignite and burn more easily
+    - Size: Smaller items, such as twigs, grass and leaves, ignite and burn more quickly. Larger items, such as trees and branches, take longer to ignite but burn hotter
+    - Continuity: Fuels that are spread out consistently, such as dry underbrush in a forest, allow fire to spread faster and burn more intensely. Lower branches on trees also allow fire to travel up trees
+2. *Weather*
+    - Wind: Higher wind speeds increase fire activity. Changing wind directions may change the direction a fire is spreading. Wind helps reduce the moisture content in fuel
+    - Temperature: Higher temperatures increase fire activity
+    - Humidity: Lower humidity helps dry fuels and increases fire activity
+3. *Topography* (the shape of the landscape)
+    - Slope: Fires tend to spread more quickly and burn uphill, especially when driven by upslope winds. Downslope winds and burning material rolling downhill increases downslope spread
+    - Aspect (the compass direction a slope faces): South-facing slopes receive more sunshine which dries fuels, warms temperature and increases fire activity
+    - Terrain: Wind speed may be increased by valleys. Mountainous regions can affect windspeed and direction
+
+
+**optimization**
+Connecting to Sentinel Hub API...
+Downloading satellite environmental layers before the fire...
+Downloading DEM topography...
+Downloading satellite environmental layers after the fire...
+Calculated Simulation Duration: 792 operational steps.
+differential_evolution step 1: f(x)= 0.5255011453985231
+differential_evolution step 2: f(x)= 0.525498897662807
+differential_evolution step 3: f(x)= 0.525498897662807
+differential_evolution step 4: f(x)= 0.5254967577398444
+differential_evolution step 5: f(x)= 0.5254967577398444
+Polishing solution with 'L-BFGS-B'
+Optimized Parameters Found: [0.05356772 0.12475602 0.27427198]
+Best Loss Achieved (1 - IoU): 0.5254967577398444
+
 
 
 ### Questions that arose
@@ -260,7 +297,7 @@ This can be written nicer later on
 
 [5] https://custom-scripts.sentinel-hub.com/custom-scripts/sentinel-2/ndmi/
 
-[6]
+[6] https://www2.gov.bc.ca/gov/content/safety/wildfire-status/wildfire-response/about-wildfire
 
 
 

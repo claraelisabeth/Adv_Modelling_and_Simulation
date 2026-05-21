@@ -36,7 +36,7 @@ params = Parameters(
 
 T = 50
 simple_fire_spreading = FireSpreadingAdvanced(params)
-simple_fire_spreading.run_simulation(T, gif_name = "results/test1")
+simple_fire_spreading.run_simulation(T, gif_name = "results/test1", visualization=True)
 
 
 
@@ -51,7 +51,7 @@ params.mu_H = 0.4
 params.wind_strength_factor = 0.6
 
 wind_fire_spreading = FireSpreadingAdvanced(params)
-wind_fire_spreading.run_simulation(T, gif_name = "results/test2_wind")
+wind_fire_spreading.run_simulation(T, gif_name = "results/test2_wind", visualization=True)
 
 
 
@@ -74,7 +74,7 @@ params.water_mask = None
 
 T = 70
 topo_fire = FireSpreadingAdvanced(params)
-topo_fire.run_simulation(T, gif_name="results/test3_slope")
+topo_fire.run_simulation(T, gif_name="results/test3_slope", visualization=True)
 
 
 
@@ -94,4 +94,4 @@ params.wind = (0.5, 0.0)
 params.wind_strength_factor = 0.5
 
 water_fire = FireSpreadingAdvanced(params)
-water_fire.run_simulation(T, gif_name="results/test4_water_barrier")
+water_fire.run_simulation(T, gif_name="results/test4_water_barrier", visualization=True)
