@@ -66,8 +66,8 @@ class Parameters:
     """
     n : int
     m : int
-    mu_H : Union[float, Sequence[float]]
-    mu_O : Union[float, Sequence[float]]
+    mu_H : Union[float, list[float]]
+    mu_O : Union[float, list[float]]
     dF : float
     dO : float
     dW : float
@@ -76,7 +76,7 @@ class Parameters:
     ignition_fuel : float = 0.3
     extinction_fuel_ratio : float = 0.15
     extinction_oxy : float = 0.05
-    wind : tuple[float, float] = (0.0, 0.0)
+    wind : Union[tuple[float, float], list[tuple[float, float]]] = (0.0, 0.0)
     start_cells : list[tuple[int, int]] = None
     random_F : bool = False
     fuel_mask : np.ndarray = None
@@ -85,6 +85,7 @@ class Parameters:
     topo_mask : np.ndarray = None
     k_slope : float = 0.1
     wind_strength_factor : float = 0
+
 
     def __post_init__(self):
         if self.start_cells is None:
@@ -342,25 +343,27 @@ class FireSpreadingAdvanced:
         return np.clip(rgb, 0, 1)
     
 
-    def run_simulation(self, T, gif_name = "fire"):
+    def run_simulation(self, T, gif_name = "fire", visualization=False):
         '''
         Run the fire spreading simulation for T timesteps and save the result as a GIF.
         '''
-        fig, ax = plt.subplots()
-
-        img = ax.imshow(self._make_rgb())
-        frames = []
+        if visualization:
+            fig, ax = plt.subplots()
+            img = ax.imshow(self._make_rgb())
+            frames = [[img]]
 
         for _ in range(T):
             self._diffuse()
             self._burning()
 
-            img_data = ax.imshow(self._make_rgb(), animated=True)
-            frames.append([img_data])
-
-        ani = animation.ArtistAnimation(fig, frames, interval=100, blit=True)
-        ani.save(gif_name + ".gif", writer="pillow")
-        plt.close(fig)
+            if visualization:
+                img_data = ax.imshow(self._make_rgb(), animated=True)
+                frames.append([img_data])
+        
+        if visualization:
+            ani = animation.ArtistAnimation(fig, frames, interval=100, blit=True)
+            ani.save(gif_name + ".gif", writer="pillow")
+            plt.close(fig)
 
 
     def calculate_simulation_burned_mask(self):

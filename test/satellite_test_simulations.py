@@ -55,7 +55,7 @@ def main():
     
     # Calculate simulation runtime step framework (Hours * steps)
     # time_steps = int(sc.get_simulation_time(fire_start_date_1, observation_end_date) * 24)
-    time_steps = 700  # for testing
+    time_steps = 300  # for testing
     print(f"Calculated Simulation Duration: {time_steps} operational steps.")
 
     params = Parameters(
@@ -94,7 +94,7 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
 
     print(f"Running simulation loop. Writing frames to {output_path}.gif...")
-    sim.run_simulation(T=time_steps, gif_name=output_path)
+    sim.run_simulation(T=time_steps, gif_name=output_path, visualization=True)
     print("Simulation finished processing successfully!")
 
 
