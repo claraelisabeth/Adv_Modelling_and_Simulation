@@ -8,12 +8,13 @@ import numpy as np
 import tifffile
 from sentinelhub import DataCollection
 
-class sentinel_client:
+class SentinelClient:
     """
     A client to interact with the Copernicus Sentinel Hub API to fetch 
     satellite imagery and calculate environmental indices.
     """
-    def __init__(self, client_id, client_secret):
+    def __init__(self, client_id="sh-83b3baad-681c-49ff-967c-a1fe3eed19a4",
+                 client_secret="L9cE8ASdvwyY64jWo8nUJQRIZ37A0XpS"):
         # API Endpoints for processing data and fetching OAuth2 tokens
         self.url = "https://sh.dataspace.copernicus.eu/api/v1/process"
         self.token_url = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
