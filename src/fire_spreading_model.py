@@ -303,21 +303,47 @@ class FireSpreadingAdvanced:
 
         self.state = state_new
 
+    def drop_water(self, center_row: int, center_col: int, height: int = 3, width: int = 5, water_amount: float = 1.0, cooling_effect: float = 0.8):
+        """
+        Simulates an airplane dropping water over a specific rectangular area.
+        
+        Parameters
+        ----------
+        center_row, center_col : int
+            The target cell where the center of the water drop hits.
+        height, width : int
+            The dimensions of the water drop (e.g., 3 rows by 5 columns).
+        water_amount : float
+            How much moisture (W) to add to the cells. Higher values mean it 
+            takes longer to evaporate before the cell can re-ignite.
+        cooling_effect : float
+            How much to reduce the heat (H) in the affected cells.
+        """
+        # Calculate grid bounds (prevents index out-of-bounds errors)
+        r_start = max(0, center_row - height // 2)
+        r_end = min(self.n, center_row + height // 2 + height % 2)
+        c_start = max(0, center_col - width // 2)
+        c_end = min(self.m, center_col + width // 2 + width % 2)
+
+        # Extinguish active fires in the drop zone
+        self.state[r_start:r_end, c_start:c_end, B] = 0
+
+        # Apply water/moisture (prevents immediate re-ignition)
+        self.state[r_start:r_end, c_start:c_end, W] += water_amount
+
+        # Cool down the area (decrease heat)
+        self.state[r_start:r_end, c_start:c_end, H] = np.maximum(
+            0, self.state[r_start:r_end, c_start:c_end, H] - cooling_effect
+        )
 
     def _make_rgb(self):
         '''
         Create an RGB image representation of the current state for visualization.
-
-        Color scheme:
-        - Beige: rocks or non-burnable areas (default background)
-        - Blue: water bodies or high moisture areas
-        - Black: burnt areas (low fuel ratio)
-        - Green: living fuel (intensity based on fuel level)
-        - Red: active fire and heat glow (intensity based on heat level)
         '''
         fire = self.state[:, :, B]
         fuel = self.state[:, :, F]
         heat = self.state[:, :, H]
+        moisture = self.state[:, :, W]  # <-- 1. Extract the moisture state
         F_start = self.initial_fuel
         fuel_ratio = fuel / (F_start + 1e-6)
 
@@ -325,7 +351,7 @@ class FireSpreadingAdvanced:
         rgb = np.full((self.state.shape[0], self.state.shape[1], 3), [0.3, 0.3, 0.0])
 
         if self.water_mask is not None:
-            rgb[self.water_mask > 0.5] = [0.0, 0.0, 1.0]  # Blue for water
+            rgb[self.water_mask > 0.5] = [0.0, 0.0, 1.0]  # Blue for permanent water
 
         # black = burnt areas
         burnt_mask = (fuel_ratio <= self.extinction_fuel_ratio) & (F_start > 0.2)
@@ -339,19 +365,69 @@ class FireSpreadingAdvanced:
         rgb[:, :, 0] += fire + 0.4 * heat
         rgb[:, :, 1] += 0.2 * fire
 
+        # <-- 2. ADD THIS BLOCK to visualize airplane water drops -->
+        # Add a cyan/light-blue tint to cells that are currently wet
+        wet_mask = moisture > 0
+        rgb[wet_mask, 0] *= 0.5           # Darken red to "cool" the visual down
+        rgb[wet_mask, 1] += 0.3           # Boost green slightly 
+        rgb[wet_mask, 2] += 0.8           # Boost blue heavily to look like water
+        # <-------------------------------------------------------->
+
         return np.clip(rgb, 0, 1)
     
 
-    def run_simulation(self, T, gif_name = "fire"):
+    def run_simulation(self, T, gif_name="fire", scheduled_drops=None):
         '''
         Run the fire spreading simulation for T timesteps and save the result as a GIF.
         '''
-        fig, ax = plt.subplots()
+        if scheduled_drops is None:
+            scheduled_drops = {}
 
+        fig, ax = plt.subplots()
         img = ax.imshow(self._make_rgb())
         frames = []
 
-        for _ in range(T):
+        for t in range(T):
+            if t in scheduled_drops:
+                for drop in scheduled_drops[t]:
+                    
+                    if drop.get('auto_target', False):
+                        # Find all coordinates where a fire is actively burning
+                        burning_cells = np.argwhere(self.state[:, :, B] == 1)
+                        
+                        if len(burning_cells) > 0:
+                            # Find the center of mass of the fire
+                            center_row = np.mean(burning_cells[:, 0])
+                            center_col = np.mean(burning_cells[:, 1])
+                            
+                            # Target the edge: Find the burning cell furthest from the center
+                            if drop.get('target_edge', True):
+                                # Calculate squared distance of all burning cells from the center
+                                distances = (burning_cells[:, 0] - center_row)**2 + (burning_cells[:, 1] - center_col)**2
+                                
+                                # Find the index of the cell with the maximum distance
+                                edge_idx = np.argmax(distances)
+                                target_row, target_col = burning_cells[edge_idx]
+                            else:
+                                target_row, target_col = center_row, center_col
+                                
+                            target_row, target_col = int(target_row), int(target_col)
+                        else:
+                            # Fallback if no fire
+                            target_row, target_col = self.n // 2, self.m // 2
+                    else:
+                        target_row = drop.get('row', self.n // 2)
+                        target_col = drop.get('col', self.m // 2)
+
+                    self.drop_water(
+                        center_row=target_row,
+                        center_col=target_col,
+                        height=drop.get('height', 3),
+                        width=drop.get('width', 5),
+                        water_amount=drop.get('water_amount', 1.0),
+                        cooling_effect=drop.get('cooling_effect', 0.8)
+                    )
+
             self._diffuse()
             self._burning()
 
@@ -361,7 +437,6 @@ class FireSpreadingAdvanced:
         ani = animation.ArtistAnimation(fig, frames, interval=100, blit=True)
         ani.save(gif_name + ".gif", writer="pillow")
         plt.close(fig)
-
 
     def calculate_simulation_burned_mask(self):
         """

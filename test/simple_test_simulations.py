@@ -77,9 +77,36 @@ topo_fire = FireSpreadingAdvanced(params)
 topo_fire.run_simulation(T, gif_name="results/test3_slope")
 
 
+#### Fourth Test: Simulation with Pre-emptive Airplane Drop (Dynamic)
+# Airplane dynamically drops a wall of water on the advancing edge of the fire at specific timesteps
 
+params.topo_mask = None
+params.water_mask = None
+params.moisture_mask = None
 
-#### Fourth Test: Simulation with moisture
+# 2. Set ignition point on the left, with wind blowing right 
+params.start_cells = [(50, 20)]
+params.wind = (0.5, 0.0)
+params.wind_strength_factor = 0.5
+
+# 3. Schedule the dynamic airplane drops
+drops = {
+    20: [
+        {'auto_target': True, 'target_edge': True, 'height': 10, 'width': 5, 'water_amount': 1.5, 'cooling_effect': 0.8}
+    ],
+    40: [
+        {'auto_target': True, 'target_edge': True, 'height': 10, 'width': 15, 'water_amount': 1.5, 'cooling_effect': 0.8}
+    ],
+    50: [
+        {'auto_target': True, 'target_edge': True, 'height': 8, 'width': 6, 'water_amount': 2.0, 'cooling_effect': 0.8}
+    ]
+}
+
+T = 80
+airdrop_fire = FireSpreadingAdvanced(params)
+airdrop_fire.run_simulation(T, gif_name="results/test4_airdrop", scheduled_drops=drops)
+
+#### Fifth Test: Simulation with moisture
 # fire should spread slower in areas with higher moisture
 params.topo_mask = None
 params.moisture_mask = None
@@ -94,4 +121,5 @@ params.wind = (0.5, 0.0)
 params.wind_strength_factor = 0.5
 
 water_fire = FireSpreadingAdvanced(params)
-water_fire.run_simulation(T, gif_name="results/test4_water_barrier")
+water_fire.run_simulation(T, gif_name="results/test5_water_barrier")
+
