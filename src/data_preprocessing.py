@@ -3,6 +3,8 @@ from oauthlib.oauth2 import BackendApplicationClient
 from requests_oauthlib import OAuth2Session
 from datetime import datetime
 import io
+import tarfile # NEW
+import json    # NEW
 import matplotlib.pyplot as plt
 import numpy as np
 import tifffile
@@ -78,18 +80,19 @@ class SentinelClient:
         else:
             print(f"Error: {response.status_code}, {response.text}")
             return None, None, None, None
-        
+
     def get_photo(self, lon_min, lat_min, lon_max, lat_max, date_start, date_end, width, height, mode="true_colour"):
         """
         Fetches visual imagery (True Colour or False Colour) for display.
-        Returns a standard RGB image (PNG).
+        Returns a standard RGB image (PNG) and the exact timestamp of the satellite pass.
         """
         if mode == "true_colour":
             bands = '["B02", "B03", "B04"]'
-            mapping = "[2.5 * sample.B04, 2.5 * sample.B03, 2.5 * sample.B02]"
+            # UPDATE 1: Use samples[0] because TILE mosaicking passes an array of samples
+            mapping = "[2.5 * samples[0].B04, 2.5 * samples[0].B03, 2.5 * samples[0].B02]"
         elif mode == "false_colour":
             bands = '["B12", "B08", "B04"]'
-            mapping = "[2.5 * sample.B12, 1.5 * sample.B08, 2.5 * sample.B04]"
+            mapping = "[2.5 * samples[0].B12, 1.5 * samples[0].B08, 2.5 * samples[0].B04]"
         else:
             raise ValueError("Mode must be 'true_colour' or 'false_colour'")
 
@@ -99,36 +102,62 @@ class SentinelClient:
                     "properties": {"crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"},
                     "bbox": [lon_min, lat_min, lon_max, lat_max]
                 },
-                "data": [{"dataFilter": {"timeRange": {"from": f"{date_start}T00:00:00Z","to": f"{date_end}T23:59:59Z"}},
-                          "type": "sentinel-2-l2a"}]
+                "data": [
+                    {"dataFilter": {"timeRange": {"from": f"{date_start}T00:00:00Z", "to": f"{date_end}T23:59:59Z"}},
+                     "type": "sentinel-2-l2a"}]
             },
             "output": {
-                "width": width, 
-                "height": height, 
-                "responses": [{"identifier": "default", "format": {"type": "image/png"}}]
+                "width": width,
+                "height": height,
+                "responses": [
+                    {"identifier": "default", "format": {"type": "image/png"}},
+                    {"identifier": "userdata", "format": {"type": "application/json"}}
+                ]
             },
             "evalscript": f"""
                 //VERSION=3
                 function setup() {{
                   return {{
                     input: {bands},
-                    output: {{ bands: 3 }}
+                    output: {{ bands: 3 }},
+                    mosaicking: "TILE" // UPDATE 2: Explicitly set mosaicking to TILE
                   }};
                 }}
-                function evaluatePixel(sample) {{
+                function evaluatePixel(samples) {{ // UPDATE 3: Accept 'samples' as an array
+                  if (samples.length === 0) return [0, 0, 0]; // Safety check
                   return {mapping};
+                }}
+                function updateOutputMetadata(scenes, inputMetadata, outputMetadata) {{
+                    // UPDATE 4: Read directly from scenes.tiles
+                    outputMetadata.userData = {{ "tiles": scenes.tiles }};
                 }}
             """
         }
 
-        response = self.oauth.post(self.url, json=data)
+        headers = {"Accept": "application/tar"}
+
+        response = self.oauth.post(self.url, json=data, headers=headers)
 
         if response.status_code == 200:
-            return plt.imread(io.BytesIO(response.content))
+            tar = tarfile.open(fileobj=io.BytesIO(response.content))
+
+            image_bytes = tar.extractfile("default.png").read()
+            image = plt.imread(io.BytesIO(image_bytes))
+
+            metadata_bytes = tar.extractfile("userdata.json").read()
+            metadata = json.loads(metadata_bytes)
+
+            try:
+                # UPDATE 5: Extract the date from the first tile object
+                timestamp = metadata["tiles"][0]["date"]
+            except (KeyError, IndexError):
+                timestamp = "Timestamp not found"
+
+            return image, timestamp
         else:
             print(f"Error: {response.status_code}, {response.text}")
-            return None
-        
+            return None, None
+
     def get_topo(self, lon_min, lat_min, lon_max, lat_max, width, height):
         """
         Fetches Digital Elevation Model (DEM) data from Copernicus.
