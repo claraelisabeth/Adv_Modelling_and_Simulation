@@ -341,6 +341,31 @@ class FireSpreadingAdvanced:
 
         self.state = state_new
 
+    def _burning_exp(self):
+        state_new = np.copy(self.state)
+        fuel_state = self.state[:, :, F]
+        heat_diffused = self.diffused_state[:, :, H]
+        burning = (self.state[:, :, B] == 1)
+
+        # deprecate fuel and check if cells extinguishes
+        self.dF = 0.1  # TODO: delete
+        state_new[:, :, F][burning] = fuel_state[burning] * (1 - self.dF)
+
+        extinguish = state_new[:, :, F] < self.extinction_fuel
+        state_new[:, :, B][burning & extinguish] = 0
+
+        # evaporation
+        state_new[:, :, W] = np.maximum(0, state_new[:, :, W] - (self.dW * heat_diffused))
+
+        # ignition
+        ignite = (state_new[:, :, W] == 0) & (heat_diffused > self.ignition_temp) & (fuel_state > self.ignition_fuel)
+        state_new[:, :, B][~burning & ignite] = 1
+
+        state_new[:, :, H][(~burning & ignite) | (burning & ~extinguish)] = self.max_H
+        state_new[:, :, H][burning & extinguish] = heat_diffused[burning & extinguish]
+        state_new[:, :, H][~burning & ~ignite] = heat_diffused[~burning & ~ignite]
+
+        self.state = state_new
 
     def _make_rgb(self):
         """
