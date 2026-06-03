@@ -73,14 +73,14 @@ class Parameters:
     """
     n : int
     m : int
-    mu_H : Union[float, list[float]]
-    mu_O : Union[float, list[float]]
-    dF : float
-    dO : float
-    dW : float
-    ignition_temp : float = 0.3
+    mu_H : Union[float, list[float]]  # TODO: optimize, then set constant
+    mu_O : Union[float, list[float]]  # TODO: optimize, then set constant
+    dF : float  # TODO: optimize, then set constant
+    dO : float  # TODO: optimize, then set constant
+    dW : float  # TODO: optimize, then set constant
+    ignition_temp : float = 0.3  # TODO: optimize, then set constant
     ignition_oxy : float = 0.76
-    ignition_fuel : float = 0.3
+    ignition_fuel : float = 0.3  # TODO: optimize, then set constant
     extinction_fuel_ratio : float = 0.15
     extinction_oxy : float = 0.05
     wind : Union[tuple[float, float], list[tuple[float, float]]] = (0.0, 0.0)
@@ -92,9 +92,9 @@ class Parameters:
     water_mask : np.ndarray = None
     moisture_mask : np.ndarray = None
     topo_mask : np.ndarray = None
-    k_slope : float = 0.1
+    k_slope : float = 0.1  # TODO: optimize, then set constant
     resolution : float = 20
-    wind_strength_factor : float = 0
+    wind_strength_factor : float = 0  # TODO: optimize, then set constant
     timesteps : int = 100
 
 
@@ -134,8 +134,17 @@ class FireSpreadingAdvanced:
     """
     Simulates wildfire spreading on a 2D grid using diffusion and combustion dynamics, including the effects of wind,
     terrain slope, and moisture.
+
+    Attributes
+    ----------
+    param : Parameters
+        An instance of the Parameters class containing all necessary parameters for the simulation.
+    precompute_mu : bool, optional
+        Whether to precompute µ for every timestep or update it during the simulation. Precomputing µ is faster but uses
+        more memory. Default is False.
     """
-    def __init__(self, param: Parameters, precompute_mu: bool = True):
+    def __init__(self, param: Parameters, precompute_mu: bool = False):
+        self.param = param
         self.timesteps = param.timesteps
         self.n = param.n
         self.m = param.m
@@ -157,6 +166,7 @@ class FireSpreadingAdvanced:
         self.ignition_fuel = param.ignition_fuel
         self.extinction_fuel_ratio = param.extinction_fuel_ratio
         self.extinction_oxy = param.extinction_oxy
+        self.extinction_fuel = 0.1  # TODO: delete or change
 
         self.precompute_mu = precompute_mu
 
@@ -176,8 +186,10 @@ class FireSpreadingAdvanced:
             self.mu_H = self._precompute_mu(param.mu_H)
             self.mu_O = self._precompute_mu(param.mu_O)
         else:
-            self.mu_H = [param.mu_H] + [(1 - param.mu_H) / 4 for _ in range(4)] if np.isscalar(param.mu_H) else param.mu_H
-            self.mu_O = [param.mu_O] + [(1 - param.mu_O) / 4 for _ in range(4)] if np.isscalar(param.mu_O) else param.mu_O
+            self.mu_H = [param.mu_H] + [(1 - param.mu_H) / 4 for _ in range(4)] \
+                if np.isscalar(param.mu_H) else param.mu_H
+            self.mu_O = [param.mu_O] + [(1 - param.mu_O) / 4 for _ in range(4)] \
+                if np.isscalar(param.mu_O) else param.mu_O
 
         # 5-layer state setup: H, F, O, B, W
         self.state = np.zeros((self.n, self.m, 5))  
@@ -199,17 +211,17 @@ class FireSpreadingAdvanced:
             self.state[:, :, F] = self.max_F
 
         if param.water_mask is not None:
-            self.state[:, :, F][param.water_mask > 0.5] = 0.0
+            self.state[:, :, F][param.water_mask > 0.0] = 0.0
 
         self.initial_fuel = self.state[:, :, F].copy()
-        self.diff_state = np.copy(self.state)
+        self.diffused_state = np.copy(self.state)
 
         if param.moisture_mask is not None:
             self.state[:, :, W] = param.moisture_mask
 
 
     def _precompute_mu(self, mu: float | tuple[float, float]) -> np.ndarray:
-        """ Precomputes µ for every timestep and grid position. This takes up more memory and my result in a crash. """
+        """ Precomputes µ for every timestep and grid position. This takes up more memory and may result in a crash. """
         mu_result = np.zeros(shape=(self.timesteps, self.n, self.m, 5), dtype=np.float32)
 
         if isinstance(mu, (tuple, list, np.ndarray)):
@@ -249,19 +261,19 @@ class FireSpreadingAdvanced:
 
     def _diffuse(self, t: int) -> None:
         """ Compute diffusion for heat and oxygen based on the current state, wind, and slope. """
-        diff_state = np.copy(self.state)
+        diffused_state = np.copy(self.state)
 
         H_pad = np.pad(self.state[:, :, H], 1, mode='edge')
         O_pad = np.pad(self.state[:, :, O], 1, mode='edge')
 
         if self.precompute_mu:
-            diff_state[:, :, H] = (self.mu_H[t, :, :, 0] * self.state[:, :, H] +
+            diffused_state[:, :, H] = (self.mu_H[t, :, :, 0] * self.state[:, :, H] +
                                    self.mu_H[t, :, :, 1] * H_pad[:-2, 1:-1] +
                                    self.mu_H[t, :, :, 2] * H_pad[2:, 1:-1] +
                                    self.mu_H[t, :, :, 3] * H_pad[1:-1, :-2] +
                                    self.mu_H[t, :, :, 4] * H_pad[1:-1, 2:])
 
-            diff_state[:, :, O] = (self.mu_O[t, :, :, 0] * self.state[:, :, O] +
+            diffused_state[:, :, O] = (self.mu_O[t, :, :, 0] * self.state[:, :, O] +
                                    self.mu_O[t, :, :, 1] * O_pad[:-2, 1:-1] +
                                    self.mu_O[t, :, :, 2] * O_pad[2:, 1:-1] +
                                    self.mu_O[t, :, :, 3] * O_pad[1:-1, :-2] +
@@ -270,39 +282,39 @@ class FireSpreadingAdvanced:
             mu_H = self._compute_mu_for_timestep(self.mu_H, t)
             mu_O = self._compute_mu_for_timestep(self.mu_O, t)
 
-            diff_state[:, :, H] = (mu_H[:, :, 0] * self.state[:, :, H] +
+            diffused_state[:, :, H] = (mu_H[:, :, 0] * self.state[:, :, H] +
                                    mu_H[:, :, 1] * H_pad[:-2, 1:-1] +
                                    mu_H[:, :, 2] * H_pad[2:, 1:-1] +
                                    mu_H[:, :, 3] * H_pad[1:-1, :-2] +
                                    mu_H[:, :, 4] * H_pad[1:-1, 2:])
 
-            diff_state[:, :, O] = (mu_O[:, :, 0] * self.state[:, :, O] +
+            diffused_state[:, :, O] = (mu_O[:, :, 0] * self.state[:, :, O] +
                                    mu_O[:, :, 1] * O_pad[:-2, 1:-1] +
                                    mu_O[:, :, 2] * O_pad[2:, 1:-1] +
                                    mu_O[:, :, 3] * O_pad[1:-1, :-2] +
                                    mu_O[:, :, 4] * O_pad[1:-1, 2:])
 
-        self.diff_state = diff_state
+        self.diffused_state = diffused_state
 
 
     def _burning(self):
         """
         Update the state of the grid based on burning dynamics, including fuel consumption, heat generation, and fire
-        spread to neighboring cells based on ignition conditions.
+        spread to neighbouring cells based on ignition conditions.
         """
         state_new = np.copy(self.state)
-        F_state = self.state[:, :, F]
-        F_start = self.initial_fuel
-        fuel_ratio = F_state / (F_start + 1e-6) # avoid division by zero
+        fuel_state = self.state[:, :, F]
+        fuel_start = self.initial_fuel
+        fuel_ratio = fuel_state / (fuel_start + 1e-6) # avoid division by zero
 
-        H_diff = self.diff_state[:, :, H]
-        O_diff = self.diff_state[:, :, O]
+        heat_diffused = self.diffused_state[:, :, H]
+        oxy_diffused = self.diffused_state[:, :, O]
 
         burning = (self.state[:, :, B] == 1) # burning cells
 
         # 1. decrement the fuel and oxygen level
-        state_new[:, :, F][burning] = np.maximum(0, F_state[burning] - self.dF)
-        state_new[:, :, O][burning] = np.maximum(0, O_diff[burning] - self.dO)
+        state_new[:, :, F][burning] = np.maximum(0, fuel_state[burning] - self.dF)
+        state_new[:, :, O][burning] = np.maximum(0, oxy_diffused[burning] - self.dO)
 
         # 2. set the heat level to maximum heat
         state_new[:, :, H][burning] = self.max_H
@@ -314,7 +326,7 @@ class FireSpreadingAdvanced:
         not_burning = ~burning # non burning cells
         
         # water (inside of plants) has to eveporate = be zero to ignite
-        evaporation_mask = (not_burning & (self.state[:, :, W] > 0) & (self.diff_state[:, :, H] > 0))
+        evaporation_mask = (not_burning & (self.state[:, :, W] > 0) & (self.diffused_state[:, :, H] > 0))
 
         # decremnent the water level
         state_new[:, :, W][evaporation_mask] = np.maximum(0, self.state[:, :, W][evaporation_mask] - self.dW)
@@ -323,9 +335,9 @@ class FireSpreadingAdvanced:
         # conditions:
         ignite = (
             (state_new[:, :, W] == 0) & 
-            (H_diff > self.ignition_temp) &
-            (F_state > self.ignition_fuel) &
-            (O_diff > self.ignition_oxy)
+            (heat_diffused > self.ignition_temp) &
+            (fuel_state > self.ignition_fuel) &
+            (oxy_diffused > self.ignition_oxy)
         )
 
         # optional randomness??
@@ -336,8 +348,8 @@ class FireSpreadingAdvanced:
         state_new[:, :, H][not_burning & ignite] = self.max_H
 
         # update remaining cells
-        state_new[:, :, H][not_burning & ~ignite] = H_diff[not_burning & ~ignite]
-        state_new[:, :, O][not_burning] = O_diff[not_burning]
+        state_new[:, :, H][not_burning & ~ignite] = heat_diffused[not_burning & ~ignite]
+        state_new[:, :, O][not_burning] = oxy_diffused[not_burning]
 
         self.state = state_new
 
@@ -388,7 +400,7 @@ class FireSpreadingAdvanced:
         rgb = np.full((self.state.shape[0], self.state.shape[1], 3), [0.3, 0.3, 0.0])
 
         if self.water_mask is not None:
-            rgb[self.water_mask > 0.5] = [0.0, 0.0, 1.0]  # Blue for water
+            rgb[self.water_mask > 0.0] = [0.0, 0.0, 1.0]  # Blue for water
 
         # black = burnt areas
         burnt_mask = (fuel_ratio <= self.extinction_fuel_ratio) & (F_start > 0.2)
@@ -399,7 +411,7 @@ class FireSpreadingAdvanced:
         rgb[living_mask, 1] = fuel[living_mask]
 
         # red = fire + heat glow
-        rgb[:, :, 0] += fire + 0.4 * heat
+        rgb[:, :, 0] += fire #+ 0.4 * heat
         rgb[:, :, 1] += 0.2 * fire
 
         return np.clip(rgb, 0, 1)
@@ -421,7 +433,7 @@ class FireSpreadingAdvanced:
 
         for t in range(timesteps):
             self._diffuse(t)
-            self._burning()
+            self._burning_exp()
 
             if visualization:
                 img_data = ax.imshow(self._make_rgb(), animated=True)
