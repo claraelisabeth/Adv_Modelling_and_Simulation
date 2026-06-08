@@ -114,7 +114,13 @@ class Parameters:
             "Not enough wind data!"
 
         # fill mask in case none are given
-        if self.fuel_mask is None:
+        if self.fuel_mask is None and self.random_F:
+            self.fuel_mask = np.random.uniform(low=0, high=1, size=(self.n, self.m))
+            for _ in range(2):
+                self.fuel_mask = (self.fuel_mask + np.roll(self.fuel_mask, 1, axis=0)
+                                  + np.roll(self.fuel_mask, -1, axis=0) + np.roll(self.fuel_mask, 1, axis=1)
+                                  + np.roll(self.fuel_mask, -1, axis=1)) / 5
+        elif self.fuel_mask is None and not self.random_F:
             self.fuel_mask = np.ones(shape=(self.n, self.m))
         if self.water_mask is None:
             self.water_mask = np.zeros(shape=(self.n, self.m))
@@ -198,17 +204,8 @@ class FireSpreadingAdvanced:
         for cell in param.start_cells:
             self.state[cell[0], cell[1], H] = self.max_H
             self.state[cell[0], cell[1], B] = 1
-        
-        if param.fuel_mask is not None:
-            self.state[:, :, F] = np.maximum(0, param.fuel_mask).copy()
-        elif param.random_F:
-            raw = np.random.uniform(0, 1, (param.n, param.m))
-            for _ in range(2):
-                raw = (raw + np.roll(raw, 1, axis=0) + np.roll(raw, -1, axis=0) +
-                       np.roll(raw, 1, axis=1) + np.roll(raw, -1, axis=1)) / 5
-            self.state[:, :, F] = self.max_F * raw
-        else:
-            self.state[:, :, F] = self.max_F
+
+        self.state[:, :, F] = np.maximum(0, param.fuel_mask).copy()
 
         if param.water_mask is not None:
             self.state[:, :, F][param.water_mask > 0.0] = 0.0
