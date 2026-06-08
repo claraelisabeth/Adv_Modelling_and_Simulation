@@ -19,12 +19,12 @@ import matplotlib.pyplot as plt
 from scipy.optimize import differential_evolution
 from scipy.ndimage import distance_transform_edt
 from src.fire_spreading_model import FireSpreadingAdvanced, Parameters
-from src.data_preprocessing import sentinel_client
+from src.data_preprocessing import SentinelClient as sentinel_client
 
 
 
 
-def objective_function(params_2optimize, target_mask, params_static, T, state_tracker):
+def objective_function(params_2optimize, target_mask, params_static, T, state_tracker, param_names):
     """
     Optimizes wildfire shapes by combining General Overlap and Spatial Distance
     """
@@ -32,19 +32,20 @@ def objective_function(params_2optimize, target_mask, params_static, T, state_tr
     distance_to_target = distance_transform_edt(~target_mask)
     
     # Run Simulation
-    # print("Running simulation") 
-    params = Parameters(
-        n=target_mask.shape[0],
-        m=target_mask.shape[1],
+    # print("Running simulation")
 
-        mu_H=float(params_2optimize[0]),        
-        dF=float(params_2optimize[1]),          
-        wind_strength_factor=float(params_2optimize[2]),   
+    optimized_params = {name: float(val) for name, val in zip(param_names, params_2optimize)}
+
+    params = Parameters(
+        **optimized_params,
         **params_static
     )
     
     sim = FireSpreadingAdvanced(params)
-    sim.run_simulation(T, gif_name=None) 
+    try:
+        sim.run_simulation(T, gif_name=None)
+    except:
+        sim.run_simulation(params_static["delta_T"])
 
     pred_mask = sim.calculate_simulation_burned_mask()
     
