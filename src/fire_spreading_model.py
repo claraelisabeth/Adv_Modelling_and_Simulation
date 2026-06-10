@@ -76,15 +76,11 @@ class Parameters:
     n: int
     m: int
     mu_H: Union[float, list[float]]  # TODO: optimize, then set constant
-    mu_O: Union[float, list[float]]  # TODO: optimize, then set constant
     dF: float  # TODO: optimize, then set constant
-    dO: float  # TODO: optimize, then set constant
     dW: float  # TODO: optimize, then set constant
     ignition_temp: float = 0.3  # TODO: optimize, then set constant
-    ignition_oxy: float = 0.76
     ignition_fuel: float = 0.3  # TODO: optimize, then set constant
     extinction_fuel: float = 0.15
-    extinction_oxy: float = 0.05
     wind: Union[tuple[float, float], list[tuple[float, float]]] = (0.0, 0.0)
     wind_velocity: float | list[float] = 0
     wind_direction: int = 0
@@ -158,7 +154,6 @@ class FireSpreadingAdvanced:
         self.m = param.m
         self.max_H = 1.0
         self.max_F = 1.0
-        self.max_O = 1.0
 
         self.dW = param.dW
         self.water_mask = param.water_mask
@@ -168,16 +163,13 @@ class FireSpreadingAdvanced:
         self.k_slope = param.k_slope
         self.wind = param.wind
         self.dF = param.dF
-        self.dO = param.dO
         self.ignition_temp = param.ignition_temp
-        self.ignition_oxy = param.ignition_oxy
         self.ignition_fuel = param.ignition_fuel
         self.extinction_fuel = param.extinction_fuel
-        self.extinction_oxy = param.extinction_oxy
 
         self.precompute_mu = precompute_mu
 
-        # wind conversion and normalization
+        # wind conversion and normalization TODO: check if correct
         wind_upper_limit = 150
         wind_vel_normal = np.array(param.wind_velocity) / wind_upper_limit
         self.wind_EW = wind_vel_normal * np.sin(np.radians(param.wind_direction)) * param.wind_strength_factor
@@ -191,16 +183,12 @@ class FireSpreadingAdvanced:
         # baseline µ or precompute for every timestep
         if precompute_mu:
             self.mu_H = self._precompute_mu(param.mu_H)
-            self.mu_O = self._precompute_mu(param.mu_O)
         else:
             self.mu_H = [param.mu_H] + [(1 - param.mu_H) / 4 for _ in range(4)] \
                 if np.isscalar(param.mu_H) else param.mu_H
-            self.mu_O = [param.mu_O] + [(1 - param.mu_O) / 4 for _ in range(4)] \
-                if np.isscalar(param.mu_O) else param.mu_O
 
         # 5-layer state setup: H, F, O, B, W
         self.state = np.zeros((self.n, self.m, 5))
-        self.state[:, :, O] = self.max_O
 
         for cell in param.start_cells:
             self.state[cell[0], cell[1], H] = self.max_H
@@ -259,7 +247,6 @@ class FireSpreadingAdvanced:
         diffused_state = np.copy(self.state)
 
         H_pad = np.pad(self.state[:, :, H], 1, mode='edge')
-        O_pad = np.pad(self.state[:, :, O], 1, mode='edge')
 
         if self.precompute_mu:
             diffused_state[:, :, H] = (self.mu_H[t, :, :, 0] * self.state[:, :, H] +
@@ -267,27 +254,14 @@ class FireSpreadingAdvanced:
                                        self.mu_H[t, :, :, 2] * H_pad[2:, 1:-1] +
                                        self.mu_H[t, :, :, 3] * H_pad[1:-1, :-2] +
                                        self.mu_H[t, :, :, 4] * H_pad[1:-1, 2:])
-
-            diffused_state[:, :, O] = (self.mu_O[t, :, :, 0] * self.state[:, :, O] +
-                                       self.mu_O[t, :, :, 1] * O_pad[:-2, 1:-1] +
-                                       self.mu_O[t, :, :, 2] * O_pad[2:, 1:-1] +
-                                       self.mu_O[t, :, :, 3] * O_pad[1:-1, :-2] +
-                                       self.mu_O[t, :, :, 4] * O_pad[1:-1, 2:])
         else:
             mu_H = self._compute_mu_for_timestep(self.mu_H, t)
-            mu_O = self._compute_mu_for_timestep(self.mu_O, t)
 
             diffused_state[:, :, H] = (mu_H[:, :, 0] * self.state[:, :, H] +
                                        mu_H[:, :, 1] * H_pad[:-2, 1:-1] +
                                        mu_H[:, :, 2] * H_pad[2:, 1:-1] +
                                        mu_H[:, :, 3] * H_pad[1:-1, :-2] +
                                        mu_H[:, :, 4] * H_pad[1:-1, 2:])
-
-            diffused_state[:, :, O] = (mu_O[:, :, 0] * self.state[:, :, O] +
-                                       mu_O[:, :, 1] * O_pad[:-2, 1:-1] +
-                                       mu_O[:, :, 2] * O_pad[2:, 1:-1] +
-                                       mu_O[:, :, 3] * O_pad[1:-1, :-2] +
-                                       mu_O[:, :, 4] * O_pad[1:-1, 2:])
 
         self.diffused_state = diffused_state
 
@@ -302,20 +276,18 @@ class FireSpreadingAdvanced:
         fuel_ratio = fuel_state / (fuel_start + 1e-6)  # avoid division by zero
 
         heat_diffused = self.diffused_state[:, :, H]
-        oxy_diffused = self.diffused_state[:, :, O]
 
         burning = (self.state[:, :, B] == 1)  # burning cells
 
         # 1. decrement the fuel and oxygen level
         state_new[:, :, F][burning] = np.maximum(0, fuel_state[burning] - self.dF)
-        state_new[:, :, O][burning] = np.maximum(0, oxy_diffused[burning] - self.dO)
 
         # 2. set the heat level to maximum heat
         state_new[:, :, H][burning] = self.max_H
 
         # 3. check if the fire is extinguished
         self.extinction_fuel_ratio = 0.15
-        extinguish = (fuel_ratio < self.extinction_fuel_ratio) | (state_new[:, :, O] < self.extinction_oxy)
+        extinguish = (fuel_ratio < self.extinction_fuel_ratio)
         state_new[:, :, B][burning & extinguish] = 0
 
         not_burning = ~burning  # non burning cells
@@ -331,8 +303,7 @@ class FireSpreadingAdvanced:
         ignite = (
                 (state_new[:, :, W] == 0) &
                 (heat_diffused > self.ignition_temp) &
-                (fuel_state > self.ignition_fuel) &
-                (oxy_diffused > self.ignition_oxy)
+                (fuel_state > self.ignition_fuel)
         )
 
         # optional randomness??
@@ -344,7 +315,6 @@ class FireSpreadingAdvanced:
 
         # update remaining cells
         state_new[:, :, H][not_burning & ~ignite] = heat_diffused[not_burning & ~ignite]
-        state_new[:, :, O][not_burning] = oxy_diffused[not_burning]
 
         self.state = state_new
 
