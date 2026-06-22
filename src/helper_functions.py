@@ -28,6 +28,42 @@ def calculate_rect_dimensions(lat_range: tuple[float, float], lon_range: tuple[f
     return width_km, height_km
 
 
+def get_slope_angles(topology: np.ndarray, resolution: float | int) -> np.ndarray:
+    """
+    Get the angles for all four directions (N, S, W, E) of the topology mask.
+
+    Parameters
+    ----------
+    topology : np.ndarray
+        Topology mask with elevation.
+    resolution : float | int
+        Pixel resolution of the topology mask. Must have the same dimensions as the elevation.
+
+    Returns
+    ------
+    np.ndarray
+        Returns a numpy array were every cell from the original topology mask has a list of the angles in radians.
+        (0 - north, 1 - south, 2 - west, 3 - east)
+    """
+    result = np.zeros(shape=(topology.shape[0], topology.shape[1], 4))
+
+    topo_padded = np.pad(topology, pad_width=1, mode="edge")
+
+    north_neighbours = topo_padded[:-2, 1:-1]
+    south_neighbours = topo_padded[2:, 1:-1]
+    west_neighbours = topo_padded[1:-1, :-2]
+    east_neighbours = topo_padded[1:-1, 2:]
+
+    result[:, :, 0] = np.arctan((north_neighbours - topology) / resolution)
+    result[:, :, 1] = np.arctan((south_neighbours - topology) / resolution)
+    result[:, :, 2] = np.arctan((west_neighbours - topology) / resolution)
+    result[:, :, 3] = np.arctan((east_neighbours - topology) / resolution)
+
+    assert not np.any(np.abs(result) > 1.5), f"At least one angle is too steep - maybe there is a bug in the resolution."
+
+    return result
+
+
 def collect_weather_data(lat: float, lon: float, start_date: datetime, end_date: datetime) -> pd.DataFrame:
     """
     Collects wind data from the https://open-meteo.com API for the given latitude, longitude and time range.
