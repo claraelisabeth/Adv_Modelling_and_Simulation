@@ -82,11 +82,11 @@ class Parameters:
     """
     n: int = None
     m: int = None
-    mu_H: Union[float, list[float]] = 0.5  # TODO: optimize, then set constant
-    dF: float = 0.5  # TODO: optimize, then set constant
-    dW: float = 0.5  # TODO: optimize, then set constant
-    ignition_temp: float = 0.3  # TODO: optimize, then set constant
-    ignition_fuel: float = 0.3  # TODO: optimize, then set constant
+    mu_H: Union[float, list[float]] = 0.5
+    dF: float = 0.5
+    dW: float = 0.5
+    ignition_temp: float = 0.3
+    ignition_fuel: float = 0.3
     extinction_fuel: float = 0.15
     wind: Union[tuple[float, float], list[tuple[float, float]]] = (0.0, 0.0)
     wind_velocity: float | list[float] = 0
@@ -97,9 +97,9 @@ class Parameters:
     water_mask: np.ndarray = None
     moisture_mask: np.ndarray = None
     topo_mask: np.ndarray = None
-    k_slope: float = 0.1  # TODO: optimize, then set constant
+    k_slope: float = 0.1
     resolution: float = 20
-    wind_strength_factor: float = 0  # TODO: optimize, then set constant
+    wind_strength_factor: float = 0
     timesteps: int = 100
     load_scenario: str = None
     optimized_params: str = None
@@ -221,7 +221,7 @@ class FireSpreadingAdvanced:
 
         self.precompute_mu = precompute_mu
 
-        # wind conversion and normalization TODO: check if correct
+        # wind conversion and normalization
         wind_upper_limit = 150
         wind_vel_normal = np.array(param.wind_velocity) / wind_upper_limit
         self.wind_EW = wind_vel_normal * np.sin(np.radians(param.wind_direction)) * param.wind_strength_factor
