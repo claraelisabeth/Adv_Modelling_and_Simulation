@@ -24,9 +24,9 @@ class Parameters:
     Attributes
     ----
     n : int
-        Number of grid rows.
+        Number of grid rows. If None, this is set to the number of rows of the fuel mask. Default is None.
     m : int
-        Number of grid columns.
+        Number of grid columns. If None, this is set to the number of columns of the fuel mask. Default is None.
     mu_H : float or ArrayLike of length 5
         Heat diffusion coefficient(s). Can be a scalar for isotropic diffusion, or a 5-element vector specifying
         diffusion weights for [center, up, down, left, right].
@@ -73,12 +73,18 @@ class Parameters:
         Scaling factor controlling the influence of terrain slope on diffusion. Default is 0.1.
     wind_strength_factor : float
         Scaling factor controlling the influence of wind on diffusion. Default is 0, keep between 0.0 and 1.0
+    load_scenario : str
+        Load the masks and weather data for a specific scenario. Available scenarios are: "santa_rosa_250m".
+        Default is None.
+    optimized_dataset : str
+        Can be used to load a set of previously optimized parameters. The trailing lengths refers to the resolution.
+        Available options are: "santa_rosa_250m". Default is None.
     """
-    n: int
-    m: int
-    mu_H: Union[float, list[float]]  # TODO: optimize, then set constant
-    dF: float  # TODO: optimize, then set constant
-    dW: float  # TODO: optimize, then set constant
+    n: int = None
+    m: int = None
+    mu_H: Union[float, list[float]] = 0.5  # TODO: optimize, then set constant
+    dF: float = 0.5  # TODO: optimize, then set constant
+    dW: float = 0.5  # TODO: optimize, then set constant
     ignition_temp: float = 0.3  # TODO: optimize, then set constant
     ignition_fuel: float = 0.3  # TODO: optimize, then set constant
     extinction_fuel: float = 0.15
@@ -95,10 +101,40 @@ class Parameters:
     resolution: float = 20
     wind_strength_factor: float = 0  # TODO: optimize, then set constant
     timesteps: int = 100
+    load_scenario: str = None
+    optimized_params: str = None
 
     def __post_init__(self):
+        # load masks of a scenario
+        if self.load_scenario == "santa_rosa_250m":
+            path = "../data/santa_rosa"
+            self.fuel_mask = np.loadtxt(f"{path}/fuel_mask_px=250m.csv")
+            self.water_mask = np.loadtxt(f"{path}/water_mask_px=250m.csv")
+            self.moisture_mask = np.loadtxt(f"{path}/moisture_mask_px=250m.csv")
+            self.topo_mask = np.loadtxt(f"{path}/topo_mask_px=250m.csv")
+            self.wind_velocity = np.loadtxt(f"{path}/wind_speed.csv")
+            self.wind_direction = np.loadtxt(f"{path}/wind_direction.csv")
+            self.start_cells = [(60, 63)]
+            self.resolution = 250
+            self.timesteps = len(self.wind_velocity)
+
+        # load the optimal set of parameters for the Santa Rosa Island Fire
+        if self.optimized_params == "santa_rosa_250m":
+            assert self.resolution == 250, f"Parameters were optimized for a resolution of {250} meters!"
+            self.mu_H = 0.93
+            self.dF = 0.14
+            self.dW = 0.30
+            self.ignition_temp = 0.31
+            self.ignition_fuel = 0.09
+            self.extinction_fuel = 0.00
+            self.wind_strength_factor = 10.34
+            self.k_slope = 9.64
+
+        if (self.m is None) or (self.n is None):
+            self.n, self.m = self.fuel_mask.shape
+
         if self.start_cells is None:
-            self.start_cells = [(0, 0)]
+            self.start_cells = [(int(self.n / 2), int(self.m / 2))]
 
         # shape the wind data
         if isinstance(self.wind_velocity, (int, float)):
@@ -397,6 +433,8 @@ class FireSpreadingAdvanced:
 
     def run_simulation(self, timesteps: int = None, gif_name: str = "fire", visualization: bool = False):
         """ Run the fire spreading simulation for a specific amount of timesteps and save the result as a GIF. """
+        if timesteps is None:
+            timesteps = self.timesteps
         if timesteps > self.timesteps:
             print(f"Warning: timesteps {timesteps} exceeds fire spreading simulation, "
                   f"simulationg {self.timesteps} timesteps instead")
