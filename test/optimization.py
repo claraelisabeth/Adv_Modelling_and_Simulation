@@ -18,13 +18,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import differential_evolution
 from scipy.ndimage import distance_transform_edt
+from scipy.signal import convolve2d
 from src.fire_spreading_model import FireSpreadingAdvanced, Parameters
 from src.data_preprocessing import SentinelClient as sentinel_client
 
 
-
-
-def objective_function(params_2optimize, target_mask, params_static, T, state_tracker, param_names):
+def objective_function(params_2optimize, target_mask, params_static, T, state_tracker, param_names, smoothing: bool = False):
     """
     Optimizes wildfire shapes by combining General Overlap and Spatial Distance
     """
@@ -47,11 +46,21 @@ def objective_function(params_2optimize, target_mask, params_static, T, state_tr
     except:
         sim.run_simulation(params_static["delta_T"])
 
-    pred_mask = sim.calculate_simulation_burned_mask()
-    
-    # General Overlap (IoU)
-    intersection = np.logical_and(pred_mask, target_mask).sum()
-    union = np.logical_or(pred_mask, target_mask).sum()
+    if smoothing:
+        kernel = np.ones((3, 3)) / 9.0
+        pred_mask = sim.calculate_simulation_burned_mask()
+        pred_smooth = convolve2d(pred_mask.astype(float), kernel, mode='same', boundary='fill', fillvalue=0)
+        target_smooth = convolve2d(target_mask.astype(float), kernel, mode='same', boundary='fill', fillvalue=0)
+
+        # General Overlap (IoU)
+        intersection = np.sum(np.minimum(pred_smooth, target_smooth))
+        union = np.sum(np.maximum(pred_smooth, target_smooth))
+    else:
+        pred_mask = sim.calculate_simulation_burned_mask()
+
+        # General Overlap (IoU)
+        intersection = np.logical_and(pred_mask, target_mask).sum()
+        union = np.logical_or(pred_mask, target_mask).sum()
     
     if union == 0:
         print("Warning: target_mask and pred_mask are both empty. Returning loss of 1.0")
