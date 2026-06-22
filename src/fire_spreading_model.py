@@ -4,6 +4,7 @@ import matplotlib.animation as animation
 import matplotlib.patches as patches
 from dataclasses import dataclass
 from typing import Sequence, Union
+from src.helper_functions import get_slope_angles
 
 H, F, O, B, W = 0, 1, 2, 3, 4
 
@@ -147,7 +148,8 @@ class FireSpreadingAdvanced:
         more memory. Default is False.
     """
 
-    def __init__(self, param: Parameters, precompute_mu: bool = False):
+    def __init__(self, param: Parameters, precompute_mu: bool = True):
+        assert precompute_mu is True, "Currently, precompute_mu cannot be set to False because the logic won't work"
         self.param = param
         self.timesteps = param.timesteps
         self.n = param.n
@@ -166,6 +168,20 @@ class FireSpreadingAdvanced:
         self.ignition_temp = param.ignition_temp
         self.ignition_fuel = param.ignition_fuel
         self.extinction_fuel = param.extinction_fuel
+
+        # slope influence
+        slope_angles = get_slope_angles(param.topo_mask, param.resolution)
+        self.slope_factor = np.exp(param.k_slope * slope_angles)
+
+        # wind influence
+        wind_upper_limit = 150
+        wind_vel_normal = np.array(param.wind_velocity) / wind_upper_limit
+        wind_direction = (3 * np.pi / 2) - np.radians(param.wind_direction)  # convert angle to unit circle convention
+        self.wind_factor = np.ones(shape=(param.timesteps, 4), dtype=float)
+        self.wind_factor[:, 0] = param.wind_strength_factor * (1 - wind_vel_normal * np.sin(wind_direction))  # north
+        self.wind_factor[:, 1] = param.wind_strength_factor * (1 + wind_vel_normal * np.sin(wind_direction))  # south
+        self.wind_factor[:, 2] = param.wind_strength_factor * (1 + wind_vel_normal * np.cos(wind_direction))  # west
+        self.wind_factor[:, 3] = param.wind_strength_factor * (1 - wind_vel_normal * np.cos(wind_direction))  # east
 
         self.precompute_mu = precompute_mu
 
@@ -215,10 +231,10 @@ class FireSpreadingAdvanced:
             mu_neighbour = (1 - mu) / 4
 
         mu_result[:, :, :, 0] = mu[0] if isinstance(mu, (tuple, list, np.ndarray)) else mu
-        mu_result[:, :, :, 1] = mu_neighbour * (1 + self.trans_NS[:, :, :])  # north
-        mu_result[:, :, :, 2] = mu_neighbour * (1 - self.trans_NS[:, :, :])  # south
-        mu_result[:, :, :, 3] = mu_neighbour * (1 - self.trans_EW[:, :, :])  # west
-        mu_result[:, :, :, 4] = mu_neighbour * (1 + self.trans_EW[:, :, :])  # east
+        mu_result[:, :, :, 1] = mu_neighbour * self.slope_factor[None, :, :, 0] * self.wind_factor[:, None, None, 0]  # north
+        mu_result[:, :, :, 2] = mu_neighbour * self.slope_factor[None, :, :, 1] * self.wind_factor[:, None, None, 1]  # south
+        mu_result[:, :, :, 3] = mu_neighbour * self.slope_factor[None, :, :, 2] * self.wind_factor[:, None, None, 2]  # west
+        mu_result[:, :, :, 4] = mu_neighbour * self.slope_factor[None, :, :, 3] * self.wind_factor[:, None, None, 3]  # east
 
         mu_result = np.clip(mu_result, a_min=0, a_max=None)
         mu_sums = np.linalg.norm(mu_result, axis=3, keepdims=True)
