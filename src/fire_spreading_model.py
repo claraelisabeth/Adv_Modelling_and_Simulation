@@ -121,14 +121,14 @@ class Parameters:
         # load the optimal set of parameters for the Santa Rosa Island Fire
         if self.optimized_params == "santa_rosa_250m":
             assert self.resolution == 250, f"Parameters were optimized for a resolution of {250} meters!"
-            self.mu_H = 0.93
-            self.dF = 0.14
-            self.dW = 0.30
-            self.ignition_temp = 0.31
-            self.ignition_fuel = 0.09
-            self.extinction_fuel = 0.00
-            self.wind_strength_factor = 10.34
-            self.k_slope = 9.64
+            self.mu_H = 0.9810848154599011
+            self.dF = 0.0970965830469438
+            self.dW = 0.08829017097122394
+            self.ignition_temp = 0.01861925873289727
+            self.ignition_fuel = 0.17763914670093223
+            self.extinction_fuel = 0.004096210941247458
+            self.wind_strength_factor = 39.54267359607066
+            self.k_slope = 20.397971074347954
 
         if (self.m is None) or (self.n is None):
             self.n, self.m = self.fuel_mask.shape
