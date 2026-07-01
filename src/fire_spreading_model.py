@@ -392,6 +392,7 @@ class FireSpreadingAdvanced:
         state_new[:, :, H][(~burning & ignite) | (burning & ~extinguish)] = self.max_H
         state_new[:, :, H][burning & extinguish] = heat_diffused[burning & extinguish]
         state_new[:, :, H][~burning & ~ignite] = heat_diffused[~burning & ~ignite]
+        state_new[:, :, H] = np.clip(state_new[:, :, H], a_min=0, a_max=1)
 
         self.state = state_new
 
