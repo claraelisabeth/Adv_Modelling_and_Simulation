@@ -74,7 +74,11 @@ class Parameters:
     wind_strength_factor : float
         Scaling factor controlling the influence of wind on diffusion. Default is 0, keep between 0.0 and 1.0
     load_scenario : str
-        Load the masks and weather data for a specific scenario. Available scenarios are: "santa_rosa_250m".
+        Load the masks and weather data for a specific scenario. Available scenarios are:
+            - "santa_rosa_250m"
+            - "santa_rosa_200m"
+            - "green_fire_250m"
+            - "green_fire_200m"
         Default is None.
     optimized_dataset : str
         Can be used to load a set of previously optimized parameters. The trailing lengths refers to the resolution.
@@ -106,29 +110,35 @@ class Parameters:
 
     def __post_init__(self):
         # load masks of a scenario
-        if self.load_scenario == "santa_rosa_250m":
-            path = "../data/santa_rosa"
-            self.fuel_mask = np.loadtxt(f"{path}/fuel_mask_px=250m.csv")
-            self.water_mask = np.loadtxt(f"{path}/water_mask_px=250m.csv")
-            self.moisture_mask = np.loadtxt(f"{path}/moisture_mask_px=250m.csv")
-            self.topo_mask = np.loadtxt(f"{path}/topo_mask_px=250m.csv")
+        if self.load_scenario is not None:
+            scenarios = ["santa_rosa_250m", "santa_rosa_200m", "green_fire_250m", "green_fire_200m"]
+            start_cells = [[(60, 63)], [(75, 78)], [(42, 36)], [(34, 29)]]
+            assert self.load_scenario in scenarios, f"Scenario {self.load_scenario} not available"
+            path, px = self.load_scenario.rsplit(sep='_', maxsplit=1)
+            path = f"../data/{path}"
+            self.resolution = int(px[:-1])
+            self.fuel_mask = np.loadtxt(f"{path}/fuel_mask_px={px}.csv")
+            self.water_mask = np.loadtxt(f"{path}/water_mask_px={px}.csv")
+            self.moisture_mask = np.loadtxt(f"{path}/moisture_mask_px={px}.csv")
+            self.topo_mask = np.loadtxt(f"{path}/topo_mask_px={px}.csv")
             self.wind_velocity = np.loadtxt(f"{path}/wind_speed.csv")
             self.wind_direction = np.loadtxt(f"{path}/wind_direction.csv")
-            self.start_cells = [(60, 63)]
-            self.resolution = 250
             self.timesteps = len(self.wind_velocity)
+            for i, s in enumerate(scenarios):
+                if self.load_scenario == s:
+                    self.start_cells = start_cells[i]
 
-        # load the optimal set of parameters for the Santa Rosa Island Fire
+        # load the optimal set of parameters for the Santa Rosa Island Fire (seed 1234)
         if self.optimized_params == "santa_rosa_250m":
             assert self.resolution == 250, f"Parameters were optimized for a resolution of {250} meters!"
-            self.mu_H = 0.9810848154599011
-            self.dF = 0.0970965830469438
-            self.dW = 0.08829017097122394
-            self.ignition_temp = 0.01861925873289727
-            self.ignition_fuel = 0.17763914670093223
-            self.extinction_fuel = 0.004096210941247458
-            self.wind_strength_factor = 39.54267359607066
-            self.k_slope = 20.397971074347954
+            self.mu_H = 0.14161430931190666
+            self.dF = 0.4564419939217821
+            self.dW = 0.010304813754344777
+            self.ignition_temp = 0.10588752039482963
+            self.ignition_fuel = 0.2277328252500457
+            self.extinction_fuel = 0.0012970991767422557
+            self.wind_strength_factor = 51.71406817169616
+            self.k_slope = 14.986196859674806
 
         if (self.m is None) or (self.n is None):
             self.n, self.m = self.fuel_mask.shape
@@ -240,7 +250,7 @@ class FireSpreadingAdvanced:
                 if np.isscalar(param.mu_H) else param.mu_H
 
         # 5-layer state setup: H, F, O, B, W
-        self.state = np.zeros((self.n, self.m, 5))
+        self.state = np.zeros(shape=(self.n, self.m, 5), dtype=np.float32)
 
         for cell in param.start_cells:
             self.state[cell[0], cell[1], H] = self.max_H
