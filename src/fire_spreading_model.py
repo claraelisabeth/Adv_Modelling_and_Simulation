@@ -467,3 +467,11 @@ class FireSpreadingAdvanced:
         has_fuel = self.initial_fuel > 1e-6
         burned_mask = has_fuel & ((self.state[:, :, B] == 1) | (fuel <= self.extinction_fuel))
         return burned_mask
+
+
+if __name__ == "__main__":
+    # quickly check if simulation is working with scenario
+    scenario = "santa_rosa_250m"
+    param = Parameters(load_scenario=scenario, optimized_params=scenario)
+    sim = FireSpreadingAdvanced(param)
+    sim.run_simulation(visualization=True, gif_name="test-delete")
