@@ -99,6 +99,7 @@ def collect_weather_data(lat: float, lon: float, start_date: datetime, end_date:
         "hourly": ["wind_speed_10m", "wind_direction_10m"],
         "wind_speed_unit": "kmh",
         "timezone": "UTC",
+        "models": "era5"
     }
 
     response = requests.get(url, params=params).json()
