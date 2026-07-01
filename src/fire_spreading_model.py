@@ -406,6 +406,135 @@ class FireSpreadingAdvanced:
 
         self.state = state_new
 
+    def drop_water(self, center_row: int, center_col: int, height: int = 3, width: int = 5, water_intensity: float = 1.0, cooling_effect: float = 0.8):
+        """
+        Simulates an airplane dropping water over a specific rectangular area.
+        
+        Parameters
+        ----------
+        center_row, center_col : int
+            The target cell where the center of the water drop hits.
+        height, width : int
+            The dimensions of the water drop (e.g., 3 rows by 5 columns).
+        water_intensity : float
+            The intensity of the water drop (0.0 to 1.0).
+        cooling_effect : float
+            How much to reduce the heat (H) in the affected cells.
+        """
+
+        intensity = np.clip(water_intensity, 0.0, 1.0)
+        
+        # Define maximum capacity of water that can be applied to a cell based on the intensity and dW
+        max_protection_timesteps = 30
+        water_amount = intensity * (max_protection_timesteps * self.dW)
+
+        # Calculate grid bounds
+        r_start = max(0, center_row - height // 2)
+        r_end = min(self.n, center_row + height // 2 + height % 2)
+        c_start = max(0, center_col - width // 2)
+        c_end = min(self.m, center_col + width // 2 + width % 2)
+
+        # Extinguish active fires in the drop zone
+        self.state[r_start:r_end, c_start:c_end, B] = 0
+
+        # Apply water/moisture (prevents immediate re-ignition)
+        self.state[r_start:r_end, c_start:c_end, W] += water_amount
+
+        # Cool down the area (decrease heat)
+        self.state[r_start:r_end, c_start:c_end, H] = np.maximum(
+            0, self.state[r_start:r_end, c_start:c_end, H] - cooling_effect
+        )
+        self.state[r_start:r_end, c_start:c_end, H] = np.clip(self.state[r_start:r_end, c_start:c_end, H], a_min=0, a_max=1)
+
+    def create_firebreak(self, center_row: int, center_col: int, height: int = 1, width: int = 20):
+        """
+        Simulates firefighters clearing vegetation (fuel) to create a firebreak.
+        """
+        r_start = max(0, center_row - height // 2)
+        r_end = min(self.n, center_row + height // 2 + height % 2)
+        c_start = max(0, center_col - width // 2)
+        c_end = min(self.m, center_col + width // 2 + width % 2)
+
+        # Remove all fuel
+        self.state[r_start:r_end, c_start:c_end, F] = 0.0
+
+        # 2. Extinguish any active fire and remove heat in that zone
+        self.state[r_start:r_end, c_start:c_end, B] = 0
+        self.state[r_start:r_end, c_start:c_end, H] = 0.0
+
+        # 3. Update initial_fuel to 0 so _make_rgb colors it as beige dirt, not black burned forest
+        self.initial_fuel[r_start:r_end, c_start:c_end] = 0.0
+
+    def _apply_interventions(self, t, scheduled_drops, scheduled_firebreaks):
+        """
+        Checks the current timestep against scheduled interventions and executes them.
+        """
+        # Airplane Water Drops
+        if scheduled_drops and t in scheduled_drops:
+            for drop in scheduled_drops[t]:
+                if drop.get('auto_target', False):
+                    # Auto-targeting edges of the fire
+                    burning_cells = np.argwhere(self.state[:, :, B] == 1)
+                    if len(burning_cells) > 0:
+                        center_row = np.mean(burning_cells[:, 0])
+                        center_col = np.mean(burning_cells[:, 1])
+                        
+                        if drop.get('target_edge', True):
+                            distances = (burning_cells[:, 0] - center_row)**2 + (burning_cells[:, 1] - center_col)**2
+                            edge_idx = np.argmax(distances)
+                            target_row, target_col = burning_cells[edge_idx]
+                        else:
+                            target_row, target_col = center_row, center_col
+                        target_row, target_col = int(target_row), int(target_col)
+                    else:
+                        target_row, target_col = self.n // 2, self.m // 2
+                else:
+                    # Hardcoded drop logic
+                    target_row = drop.get('row', self.n // 2)
+                    target_col = drop.get('col', self.m // 2)
+
+                self.drop_water(
+                    center_row=target_row,
+                    center_col=target_col,
+                    height=drop.get('height', 3),
+                    width=drop.get('width', 5),
+                    water_intensity=drop.get('water_intensity', 1.0),
+                    cooling_effect=drop.get('cooling_effect', 0.8)
+                )
+
+        # Firefighter Firebreaks
+        if scheduled_firebreaks and t in scheduled_firebreaks:
+            for fb in scheduled_firebreaks[t]:
+                if fb.get('auto_target', False):
+                    # Find the fire and look ahead of the wind
+                    burning_cells = np.argwhere(self.state[:, :, B] == 1)
+                    if len(burning_cells) > 0:
+                        center_row = np.mean(burning_cells[:, 0])
+                        center_col = np.mean(burning_cells[:, 1])
+                        
+                        # Offset multiplier determines how far ahead of the fire to build
+                        offset = fb.get('wind_offset', 25) 
+                        
+                        # Fetch the wind vector for the current timestep (t)
+                        wx = self.wind_EW[t] if hasattr(self, 'wind_EW') else 0
+                        wy = self.wind_NS[t] if hasattr(self, 'wind_NS') else 0
+                        
+                        # Calculate target coordinates based on wind arrays
+                        target_col = int(center_col + (wx * offset))
+                        target_row = int(center_row + (wy * offset))
+                    else:
+                        target_row, target_col = self.n // 2, self.m // 2
+                else:
+                    target_row = fb.get('row', self.n // 2)
+                    target_col = fb.get('col', self.m // 2)
+
+                self.create_firebreak(
+                    center_row=target_row,
+                    center_col=target_col,
+                    height=fb.get('height', 1),
+                    width=fb.get('width', 20)
+                )
+
     def _make_rgb(self):
         """
         Create an RGB image representation of the current state for visualization.
@@ -420,6 +549,7 @@ class FireSpreadingAdvanced:
         fire = self.state[:, :, B]
         fuel = self.state[:, :, F]
         heat = self.state[:, :, H]
+        moisture = self.state[:, :, W]
         F_start = self.initial_fuel
 
         # Initialize to rock baseline (Beige-ish dark yellow)
@@ -440,9 +570,15 @@ class FireSpreadingAdvanced:
         rgb[:, :, 0] += fire
         rgb[:, :, 1] += 0.2 * fire
 
+        # light-blue tint to cells that are currently wet
+        wet_mask = moisture > 0
+        rgb[wet_mask, 0] *= 0.5           
+        rgb[wet_mask, 1] += 0.3           
+        rgb[wet_mask, 2] += 0.8
+
         return np.clip(rgb, 0, 1)
 
-    def run_simulation(self, timesteps: int = None, gif_name: str = "fire", visualization: bool = False):
+    def run_simulation(self, timesteps: int = None, gif_name: str = "fire", visualization: bool = False, scheduled_drops=None, scheduled_firebreaks=None):
         """ Run the fire spreading simulation for a specific amount of timesteps and save the result as a GIF. """
         if timesteps is None:
             timesteps = self.timesteps
@@ -459,6 +595,8 @@ class FireSpreadingAdvanced:
             frames = [[img]]
 
         for t in range(timesteps):
+            self._apply_interventions(t, scheduled_drops, scheduled_firebreaks)
+
             self._diffuse(t)
             self._burning_exp()
 
