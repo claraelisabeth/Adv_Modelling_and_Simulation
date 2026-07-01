@@ -74,7 +74,11 @@ class Parameters:
     wind_strength_factor : float
         Scaling factor controlling the influence of wind on diffusion. Default is 0, keep between 0.0 and 1.0
     load_scenario : str
-        Load the masks and weather data for a specific scenario. Available scenarios are: "santa_rosa_250m".
+        Load the masks and weather data for a specific scenario. Available scenarios are:
+            - "santa_rosa_250m"
+            - "santa_rosa_200m"
+            - "green_fire_250m"
+            - "green_fire_200m"
         Default is None.
     optimized_dataset : str
         Can be used to load a set of previously optimized parameters. The trailing lengths refers to the resolution.
@@ -106,29 +110,35 @@ class Parameters:
 
     def __post_init__(self):
         # load masks of a scenario
-        if self.load_scenario == "santa_rosa_250m":
-            path = "data/santa_rosa"
-            self.fuel_mask = np.loadtxt(f"{path}/fuel_mask_px=250m.csv")
-            self.water_mask = np.loadtxt(f"{path}/water_mask_px=250m.csv")
-            self.moisture_mask = np.loadtxt(f"{path}/moisture_mask_px=250m.csv")
-            self.topo_mask = np.loadtxt(f"{path}/topo_mask_px=250m.csv")
+        if self.load_scenario is not None:
+            scenarios = ["santa_rosa_250m", "santa_rosa_200m", "green_fire_250m", "green_fire_200m"]
+            start_cells = [[(60, 63)], [(75, 78)], [(42, 36)], [(34, 29)]]
+            assert self.load_scenario in scenarios, f"Scenario {self.load_scenario} not available"
+            path, px = self.load_scenario.rsplit(sep='_', maxsplit=1)
+            path = f"../data/{path}"
+            self.resolution = int(px[:-1])
+            self.fuel_mask = np.loadtxt(f"{path}/fuel_mask_px={px}.csv")
+            self.water_mask = np.loadtxt(f"{path}/water_mask_px={px}.csv")
+            self.moisture_mask = np.loadtxt(f"{path}/moisture_mask_px={px}.csv")
+            self.topo_mask = np.loadtxt(f"{path}/topo_mask_px={px}.csv")
             self.wind_velocity = np.loadtxt(f"{path}/wind_speed.csv")
             self.wind_direction = np.loadtxt(f"{path}/wind_direction.csv")
-            self.start_cells = [(60, 63)]
-            self.resolution = 250
             self.timesteps = len(self.wind_velocity)
+            for i, s in enumerate(scenarios):
+                if self.load_scenario == s:
+                    self.start_cells = start_cells[i]
 
-        # load the optimal set of parameters for the Santa Rosa Island Fire
+        # load the optimal set of parameters for the Santa Rosa Island Fire (seed 1234)
         if self.optimized_params == "santa_rosa_250m":
             assert self.resolution == 250, f"Parameters were optimized for a resolution of {250} meters!"
-            self.mu_H = 0.93
-            self.dF = 0.14
-            self.dW = 0.30
-            self.ignition_temp = 0.31
-            self.ignition_fuel = 0.09
-            self.extinction_fuel = 0.00
-            self.wind_strength_factor = 10.34
-            self.k_slope = 9.64
+            self.mu_H = 0.14161430931190666
+            self.dF = 0.4564419939217821
+            self.dW = 0.010304813754344777
+            self.ignition_temp = 0.10588752039482963
+            self.ignition_fuel = 0.2277328252500457
+            self.extinction_fuel = 0.0012970991767422557
+            self.wind_strength_factor = 51.71406817169616
+            self.k_slope = 14.986196859674806
 
         if (self.m is None) or (self.n is None):
             self.n, self.m = self.fuel_mask.shape
@@ -240,7 +250,7 @@ class FireSpreadingAdvanced:
                 if np.isscalar(param.mu_H) else param.mu_H
 
         # 5-layer state setup: H, F, O, B, W
-        self.state = np.zeros((self.n, self.m, 5))
+        self.state = np.zeros(shape=(self.n, self.m, 5), dtype=np.float32)
 
         for cell in param.start_cells:
             self.state[cell[0], cell[1], H] = self.max_H
@@ -261,22 +271,19 @@ class FireSpreadingAdvanced:
         """ Precomputes µ for every timestep and grid position. This takes up more memory and may result in a crash. """
         mu_result = np.zeros(shape=(self.timesteps, self.n, self.m, 5), dtype=np.float32)
 
-        is_vector = isinstance(mu, (tuple, list, np.ndarray))
-
-        if is_vector:
-            mu_center, mu_N, mu_S, mu_W, mu_E = mu
+        if isinstance(mu, (tuple, list, np.ndarray)):
+            mu_neighbour = mu[1]
         else:
-            mu_center = mu
-            mu_N = mu_S = mu_W = mu_E = (1 - mu) / 4
+            mu_neighbour = (1 - mu) / 4
 
-        mu_result[:, :, :, 0] = mu_center
-        mu_result[:, :, :, 1] = mu_N * self.slope_factor[None, :, :, 0] * self.wind_factor[:, None, None, 0]  # north
-        mu_result[:, :, :, 2] = mu_S * self.slope_factor[None, :, :, 1] * self.wind_factor[:, None, None, 1]  # south
-        mu_result[:, :, :, 3] = mu_W * self.slope_factor[None, :, :, 2] * self.wind_factor[:, None, None, 2]  # west
-        mu_result[:, :, :, 4] = mu_E * self.slope_factor[None, :, :, 3] * self.wind_factor[:, None, None, 3]  # east
+        mu_result[:, :, :, 0] = mu[0] if isinstance(mu, (tuple, list, np.ndarray)) else mu
+        mu_result[:, :, :, 1] = mu_neighbour * self.slope_factor[None, :, :, 0] * self.wind_factor[:, None, None, 0]  # north
+        mu_result[:, :, :, 2] = mu_neighbour * self.slope_factor[None, :, :, 1] * self.wind_factor[:, None, None, 1]  # south
+        mu_result[:, :, :, 3] = mu_neighbour * self.slope_factor[None, :, :, 2] * self.wind_factor[:, None, None, 2]  # west
+        mu_result[:, :, :, 4] = mu_neighbour * self.slope_factor[None, :, :, 3] * self.wind_factor[:, None, None, 3]  # east
 
         mu_result = np.clip(mu_result, a_min=0, a_max=None)
-        mu_sums = np.sum(mu_result, axis=3, keepdims=True)
+        mu_sums = np.linalg.norm(mu_result, axis=3, keepdims=True)
         mu_result = mu_result / (mu_sums + 1e-6)
 
         return mu_result
@@ -292,7 +299,7 @@ class FireSpreadingAdvanced:
         mu_result[:, :, 4] = mu[4] * (1 + self.trans_EW[t, :, :])  # east
 
         mu_result = np.clip(mu_result, a_min=0, a_max=None)
-        mu_sums = np.sum(mu_result, axis=2, keepdims=True)
+        mu_sums = np.linalg.norm(mu_result, axis=2, keepdims=True)
         mu_result = mu_result / (mu_sums + 1e-6)
 
         return mu_result
@@ -305,18 +312,18 @@ class FireSpreadingAdvanced:
 
         if self.precompute_mu:
             diffused_state[:, :, H] = (self.mu_H[t, :, :, 0] * self.state[:, :, H] +
-                                       self.mu_H[t, :, :, 1] * H_pad[2:, 1:-1] +  # Pushes North (pulls from South)
-                                       self.mu_H[t, :, :, 2] * H_pad[:-2, 1:-1] + # Pushes South (pulls from North)
-                                       self.mu_H[t, :, :, 3] * H_pad[1:-1, 2:] +  # Pushes West (pulls from East)
-                                       self.mu_H[t, :, :, 4] * H_pad[1:-1, :-2])  # Pushes East (pulls from West)
+                                       self.mu_H[t, :, :, 1] * H_pad[:-2, 1:-1] +
+                                       self.mu_H[t, :, :, 2] * H_pad[2:, 1:-1] +
+                                       self.mu_H[t, :, :, 3] * H_pad[1:-1, :-2] +
+                                       self.mu_H[t, :, :, 4] * H_pad[1:-1, 2:])
         else:
             mu_H = self._compute_mu_for_timestep(self.mu_H, t)
 
             diffused_state[:, :, H] = (mu_H[:, :, 0] * self.state[:, :, H] +
-                                       mu_H[:, :, 1] * H_pad[2:, 1:-1] +
-                                       mu_H[:, :, 2] * H_pad[:-2, 1:-1] +
-                                       mu_H[:, :, 3] * H_pad[1:-1, 2:] +
-                                       mu_H[:, :, 4] * H_pad[1:-1, :-2])
+                                       mu_H[:, :, 1] * H_pad[:-2, 1:-1] +
+                                       mu_H[:, :, 2] * H_pad[2:, 1:-1] +
+                                       mu_H[:, :, 3] * H_pad[1:-1, :-2] +
+                                       mu_H[:, :, 4] * H_pad[1:-1, 2:])
 
         self.diffused_state = diffused_state
 
@@ -395,6 +402,7 @@ class FireSpreadingAdvanced:
         state_new[:, :, H][(~burning & ignite) | (burning & ~extinguish)] = self.max_H
         state_new[:, :, H][burning & extinguish] = heat_diffused[burning & extinguish]
         state_new[:, :, H][~burning & ~ignite] = heat_diffused[~burning & ~ignite]
+        state_new[:, :, H] = np.clip(state_new[:, :, H], a_min=0, a_max=1)
 
         self.state = state_new
 
@@ -436,6 +444,7 @@ class FireSpreadingAdvanced:
         self.state[r_start:r_end, c_start:c_end, H] = np.maximum(
             0, self.state[r_start:r_end, c_start:c_end, H] - cooling_effect
         )
+        self.state[r_start:r_end, c_start:c_end, H] = np.clip(self.state[r_start:r_end, c_start:c_end, H], a_min=0, a_max=1)
 
     def create_firebreak(self, center_row: int, center_col: int, height: int = 1, width: int = 20):
         """
@@ -606,3 +615,11 @@ class FireSpreadingAdvanced:
         has_fuel = self.initial_fuel > 1e-6
         burned_mask = has_fuel & ((self.state[:, :, B] == 1) | (fuel <= self.extinction_fuel))
         return burned_mask
+
+
+if __name__ == "__main__":
+    # quickly check if simulation is working with scenario
+    scenario = "santa_rosa_250m"
+    param = Parameters(load_scenario=scenario, optimized_params=scenario)
+    sim = FireSpreadingAdvanced(param)
+    sim.run_simulation(visualization=True, gif_name="test-delete")

@@ -75,20 +75,20 @@ params.water_mask = None
 params.moisture_mask = None
 
 params.start_cells = [(50, 20)]
-params.wind_velocity = 50
-params.wind_direction = 90
-params.wind_strength_factor = 0.5
+params.wind_velocity = 30
+params.wind_direction = 110
+params.wind_strength_factor = 0.3
 
 # 3. Schedule the dynamic airplane drops
 drops = {
     20: [
-        {'auto_target': True, 'target_edge': True, 'height': 5, 'width': 3, 'water_intensity': 0.8, 'cooling_effect': 0.8}
+        {'auto_target': True, 'target_edge': True, 'height': 15, 'width': 13, 'water_intensity': 1, 'cooling_effect': 1}
     ],
     30: [
-        {'auto_target': True, 'target_edge': True, 'height': 8, 'width': 4, 'water_intensity': 0.5, 'cooling_effect': 0.8}
+        {'auto_target': True, 'target_edge': True, 'height': 23, 'width': 14, 'water_intensity': 0.7, 'cooling_effect': 0.8}
     ],
     40: [
-        {'auto_target': True, 'target_edge': True, 'height': 10, 'width': 7, 'water_intensity': 0.7, 'cooling_effect': 0.8}
+        {'auto_target': True, 'target_edge': True, 'height': 10, 'width': 7, 'water_intensity': 0.8, 'cooling_effect': 0.9}
     ]
 }
 
