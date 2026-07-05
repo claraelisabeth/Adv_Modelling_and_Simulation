@@ -571,14 +571,16 @@ class FireSpreadingAdvanced:
         rgb[:, :, 1] += 0.2 * fire
 
         # light-blue tint to cells that are currently wet
-        wet_mask = moisture > 0
-        rgb[wet_mask, 0] *= 0.5           
-        rgb[wet_mask, 1] += 0.3           
-        rgb[wet_mask, 2] += 0.8
+        #wet_mask = moisture > 0
+        #rgb[wet_mask, 0] *= 0.5
+        #rgb[wet_mask, 1] += 0.3
+        #rgb[wet_mask, 2] += 0.8
 
         return np.clip(rgb, 0, 1)
 
-    def run_simulation(self, timesteps: int = None, gif_name: str = "fire", visualization: bool = False, scheduled_drops=None, scheduled_firebreaks=None):
+    def run_simulation(self, timesteps: int = None, gif_name: str = "fire", visualization: bool = False,
+                       snapshots: list = [], snapshot_name: str = "snapshot", scheduled_drops=None,
+                       scheduled_firebreaks=None):
         """ Run the fire spreading simulation for a specific amount of timesteps and save the result as a GIF. """
         if timesteps is None:
             timesteps = self.timesteps
@@ -595,6 +597,14 @@ class FireSpreadingAdvanced:
             frames = [[img]]
 
         for t in range(timesteps):
+            if t in snapshots:
+                plt.imshow(self._make_rgb())
+                plt.title(f"{t} hours")
+                plt.xticks([])
+                plt.yticks([])
+                plt.tight_layout()
+                plt.savefig(f"{snapshot_name}_{t:03}.png", dpi=300)
+
             self._apply_interventions(t, scheduled_drops, scheduled_firebreaks)
 
             self._diffuse(t)
@@ -608,6 +618,15 @@ class FireSpreadingAdvanced:
             ani = animation.ArtistAnimation(fig, frames, interval=100, blit=True)
             ani.save(gif_name + ".gif", writer="pillow")
             plt.close(fig)
+
+        if len(snapshots) > 0:
+            if np.max(snapshots) >= self.timesteps:
+                plt.imshow(self._make_rgb())
+                plt.title(f"{self.timesteps} hours")
+                plt.xticks([])
+                plt.yticks([])
+                plt.tight_layout()
+                plt.savefig(f"{snapshot_name}_{self.timesteps:03}.png", dpi=300)
 
     def calculate_simulation_burned_mask(self):
         """ Calculates the which cells got burned. """
